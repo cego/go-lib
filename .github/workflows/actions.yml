@@ -40,4 +40,4 @@ jobs:
       - name: Test Report
         uses: becheran/go-testreport@main
         with:
-          input: report.json
+          input: test.json
