@@ -20,7 +20,7 @@ err := error.Error("A error")
 logger.Error(err.Error)
 
 handleFunc := func(writer http.ResponseWriter, request *http.Request) {
-    logger.Debug("Very nice")
+    logger.Debug("Very nice", cego.GetSlogAttrFromRequest(request))
 }
 ```
 
