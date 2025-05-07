@@ -18,15 +18,17 @@ logger.Debug("Very nice")
 
 err := error.Error("A error")
 logger.Error(err.Error)
+
+handleFunc := func(writer http.ResponseWriter, request *http.Request) {
+    logger.Debug("Very nice")
+}
 ```
 
 ## Using Renderer
 ```go
-type SomeStruct struct {
-    render *cego.Renderer
-}
-
-func (h SomeStruct) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-	h.renderer.Text(w, http.StatusOK, "We are is healthy")
+logger := cego.NewLogger()
+renderer := cego.NewRenderer(logger)
+handleFunc := func(writer http.ResponseWriter, request *http.Request) {
+    renderer.Text(w, http.StatusOK, "Action package excitement !!!")
 }
 ```
