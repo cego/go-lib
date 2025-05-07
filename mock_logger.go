@@ -14,6 +14,7 @@ type MockLogger struct {
 func NewMockLogger() *MockLogger {
 	m := &MockLogger{}
 	m.On("Debug", mock.Anything, mock.Anything).Return(nil)
+	m.On("Info", mock.Anything, mock.Anything).Return(nil)
 	m.On("Error", mock.Anything, mock.Anything).Return(nil)
 	return m
 }

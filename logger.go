@@ -36,7 +36,7 @@ func NewLogger() Logger {
 	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
 }
 
-func GetAttrFromRequest(req *http.Request) slog.Attr {
+func GetSlogAttrFromRequest(req *http.Request) slog.Attr {
 	userAgent := req.Header.Get("User-Agent")
 	xForwardedFor := req.Header.Get("X-Forwarded-For")
 	remoteAddr := req.RemoteAddr
