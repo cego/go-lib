@@ -30,7 +30,7 @@ jobs:
         uses: actions/setup-go@v5.4.0
 
       - name: Run tests
-        run: go test ./...
+        run: go test -coverprofile=cover.out ./...
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5.2.0
