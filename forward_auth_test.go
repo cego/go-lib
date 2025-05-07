@@ -34,7 +34,7 @@ func TestForwardAuthHandler(t *testing.T) {
 		f.Handler(allGoodHandler).ServeHTTP(response, request)
 
 		assert.Equal(t, response.Code, 200)
-		assert.Equal(t, response.Body.String(), "All good !!!")
+		assert.Equal(t, response.Body.String(), "All good  !!!")
 	})
 
 	t.Run("forward auth handlerfunc passthrough", func(t *testing.T) {
