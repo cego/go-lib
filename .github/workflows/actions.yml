@@ -29,5 +29,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
 
-      - name: run tests
+      - name: Run tests
         run: go test -json ./... > test.json
+
+      - name: Tests Annotate
+        uses: guyarb/golang-test-annotations@v0.5.1
+        with:
+          test-results: test.json
+
+      - name: Test Report
+        uses: becheran/go-testreport@main
+        with:
+          input: report.json
