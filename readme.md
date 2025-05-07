@@ -1,4 +1,4 @@
-[![build](https://img.shields.io/github/actions/workflow/status/cego/go-lib/build.yml?branch=main)](https://github.com/cego/go-lib/actions)
+[![actions](https://img.shields.io/github/actions/workflow/status/cego/go-lib/actions.yml?branch=main)](https://github.com/cego/go-lib/actions)
 [![license](https://img.shields.io/github/license/cego/go-lib)](https://npmjs.org/package/gitlab-ci-local)
 [![Renovate](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://renovatebot.com)
 
