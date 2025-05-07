@@ -22,6 +22,11 @@ logger.Error(err.Error)
 handleFunc := func(writer http.ResponseWriter, request *http.Request) {
     logger.Debug("Very nice", cego.GetSlogAttrFromRequest(request))
 }
+
+// Setting your logger as the global one
+logger := log.NewLogger()
+slog.SetDefault(logger)
+slog.Debug("Also in ecs format")
 ```
 
 ## Using Renderer

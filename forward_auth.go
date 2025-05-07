@@ -1,6 +1,7 @@
 package cego
 
 import (
+	"encoding/base64"
 	"io"
 	"net/http"
 	"time"
@@ -64,6 +65,14 @@ func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 		req.Header.Set("Cookie", r.Header.Get("Cookie"))
 		req.Header.Set("Authorization", r.Header.Get("Authorization"))
 
+		// Convert username:password in url to Authorization Header if not already present
+		passwordInUrl, passwordInUrlOk := r.URL.User.Password()
+		if req.Header.Get("Authorization") != "" && passwordInUrlOk {
+			usernameInUrl := r.URL.User.Username()
+			usernamePasswordEncoded := base64.URLEncoding.EncodeToString([]byte(usernameInUrl + ":" + passwordInUrl))
+			req.Header.Set("Authorization", "Basic "+usernamePasswordEncoded)
+		}
+
 		resp, err := f.httpClient.Do(req)
 		if err != nil {
 			f.renderer.Text(w, http.StatusInternalServerError, err.Error())
@@ -76,6 +85,7 @@ func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 			if err != nil {
 				f.renderer.Text(w, http.StatusInternalServerError, err.Error())
 				f.logger.Error(err.Error())
+				return
 			}
 			f.renderer.Data(w, resp.StatusCode, bodyBytes, resp.Header.Get("Content-Type"))
 			return
