@@ -2,7 +2,7 @@
 
 ```go
 mux := http.NewServeMux()
-forwardAuth := cego.NewForwardAuthHandler(reverseProxy, logger, "https://sso.cego.dk/auth", "netbox.cego.dk")
+forwardAuth := cego.NewForwardAuth(reverseProxy, logger, "https://sso.cego.dk/auth", "netbox.cego.dk")
 
 mux.Handle("/data", forwardAuth.Handler(reverseProxy))
 mux.Handle("/data", forwardAuth.HandlerFunc(func (w http.ResponseWrite, req *http.Request) {
