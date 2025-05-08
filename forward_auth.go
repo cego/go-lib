@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/cego/go-lib/headers"
 )
 
 type OptionsForwardAuthFunc func(f *ForwardAuth)
@@ -53,24 +55,24 @@ func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 		}
 
 		proto := "https"
-		if req.Header.Get("X-Forwarded-Proto") != "" {
-			proto = req.Header.Get("X-Forwarded-Proto")
+		if req.Header.Get(headers.XForwardedProto) != "" {
+			proto = req.Header.Get(headers.XForwardedProto)
 		}
 
-		req.Header.Set("X-Forwarded-Method", r.Method)
-		req.Header.Set("X-Forwarded-Proto", proto)
-		req.Header.Set("X-Forwarded-Host", f.forwardAuthXForwardedHost)
-		req.Header.Set("X-Forwarded-Uri", r.URL.RawPath)
-		req.Header.Set("User-Agent", r.Header.Get("User-Agent"))
-		req.Header.Set("Cookie", r.Header.Get("Cookie"))
-		req.Header.Set("Authorization", r.Header.Get("Authorization"))
+		req.Header.Set(headers.XForwardedMethod, r.Method)
+		req.Header.Set(headers.XForwardedProto, proto)
+		req.Header.Set(headers.XForwardedHost, f.forwardAuthXForwardedHost)
+		req.Header.Set(headers.XForwardedUri, r.URL.RawPath)
+		req.Header.Set(headers.UserAgent, r.Header.Get(headers.UserAgent))
+		req.Header.Set(headers.Cookie, r.Header.Get(headers.Cookie))
+		req.Header.Set(headers.Authorization, r.Header.Get(headers.Authorization))
 
 		// Convert username:password in url to Authorization Header if not already present
 		passwordInUrl, passwordInUrlOk := r.URL.User.Password()
-		if req.Header.Get("Authorization") == "" && passwordInUrlOk {
+		if req.Header.Get(headers.Authorization) == "" && passwordInUrlOk {
 			usernameInUrl := r.URL.User.Username()
 			usernamePasswordEncoded := base64.URLEncoding.EncodeToString([]byte(usernameInUrl + ":" + passwordInUrl))
-			req.Header.Set("Authorization", "Basic "+usernamePasswordEncoded)
+			req.Header.Set(headers.Authorization, "Basic "+usernamePasswordEncoded)
 		}
 
 		resp, err := f.httpClient.Do(req)
@@ -87,11 +89,11 @@ func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 				f.logger.Error(err.Error())
 				return
 			}
-			f.renderer.Data(w, resp.StatusCode, bodyBytes, resp.Header.Get("Content-Type"))
+			f.renderer.Data(w, resp.StatusCode, bodyBytes, resp.Header.Get(headers.ContentType))
 			return
 		}
 
-		r.Header.Set("Remote-User", resp.Header.Get("Remote-User"))
+		r.Header.Set(headers.RemoteUser, resp.Header.Get(headers.RemoteUser))
 
 		handler.ServeHTTP(w, r)
 	})
