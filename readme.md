@@ -29,7 +29,7 @@ logger := cego.NewLogger()
 
 logger.Debug("Very nice")
 
-err := error.Error("A error")
+err := error.Error("An error")
 logger.Error(err.Error)
 
 handleFunc := func(writer http.ResponseWriter, request *http.Request) {
