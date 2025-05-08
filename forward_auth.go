@@ -60,14 +60,14 @@ func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 		req.Header.Set("X-Forwarded-Method", r.Method)
 		req.Header.Set("X-Forwarded-Proto", proto)
 		req.Header.Set("X-Forwarded-Host", f.forwardAuthXForwardedHost)
-		req.Header.Set("X-Forwarded-Uri", r.Header.Get("X-Forwarded-Uri"))
+		req.Header.Set("X-Forwarded-Uri", r.URL.RawPath)
 		req.Header.Set("User-Agent", r.Header.Get("User-Agent"))
 		req.Header.Set("Cookie", r.Header.Get("Cookie"))
 		req.Header.Set("Authorization", r.Header.Get("Authorization"))
 
 		// Convert username:password in url to Authorization Header if not already present
 		passwordInUrl, passwordInUrlOk := r.URL.User.Password()
-		if req.Header.Get("Authorization") != "" && passwordInUrlOk {
+		if req.Header.Get("Authorization") == "" && passwordInUrlOk {
 			usernameInUrl := r.URL.User.Username()
 			usernamePasswordEncoded := base64.URLEncoding.EncodeToString([]byte(usernameInUrl + ":" + passwordInUrl))
 			req.Header.Set("Authorization", "Basic "+usernamePasswordEncoded)
