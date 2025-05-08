@@ -60,7 +60,7 @@ func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 		req.Header.Set("X-Forwarded-Method", r.Method)
 		req.Header.Set("X-Forwarded-Proto", proto)
 		req.Header.Set("X-Forwarded-Host", f.forwardAuthXForwardedHost)
-		req.Header.Set("X-Forwarded-Uri", r.URL.RawPath)
+		req.Header.Set("X-Forwarded-Uri", r.URL.Path)
 		req.Header.Set("User-Agent", r.Header.Get("User-Agent"))
 		req.Header.Set("Cookie", r.Header.Get("Cookie"))
 		req.Header.Set("Authorization", r.Header.Get("Authorization"))
