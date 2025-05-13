@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"time"
 )
 
@@ -34,6 +35,17 @@ func NewLogger() Logger {
 	}
 
 	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
+}
+
+func GetSlogAttrFromError(err error) slog.Attr {
+	var attrs []slog.Attr
+
+	attrs = append(attrs, slog.String("error.message", err.Error()))
+	attrs = append(attrs, slog.String("error.stack_trace", string(debug.Stack())))
+
+	attr := slog.Attr{}
+	attr.Value = slog.GroupValue(attrs...)
+	return attr
 }
 
 func GetSlogAttrFromRequest(req *http.Request) slog.Attr {
