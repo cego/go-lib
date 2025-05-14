@@ -8,6 +8,8 @@ import (
 	"os"
 	"runtime/debug"
 	"time"
+
+	"github.com/cego/go-lib/headers"
 )
 
 type Logger interface {
@@ -49,25 +51,33 @@ func GetSlogAttrFromError(err error) slog.Attr {
 }
 
 func GetSlogAttrFromRequest(req *http.Request) slog.Attr {
-	userAgent := req.Header.Get("User-Agent")
-	xForwardedFor := req.Header.Get("X-Forwarded-For")
-	remoteAddr := req.RemoteAddr
-
-	clientIp, _, _ := net.SplitHostPort(remoteAddr)
-
 	var attrs []slog.Attr
 
+	reqHeaders := req.Header
+
+	remoteAddr := req.RemoteAddr
+	clientIp, _, _ := net.SplitHostPort(remoteAddr)
 	attrs = append(attrs, slog.String("client.ip", clientIp))
-	attrs = append(attrs, slog.String("user_agent.original", userAgent))
-	if xForwardedFor != "" {
-		attrs = append(attrs, slog.String("client.address", xForwardedFor))
+
+	if reqHeaders.Get(headers.XForwardedFor) != "" {
+		attrs = append(attrs, slog.String("client.address", reqHeaders.Get(headers.XForwardedFor)))
 	}
 
-	headers := req.Header.Clone()
-	headers.Set("Cookie", "<masked>")
-	headers.Set("Authorization", "<masked>")
-	headersJsonMarshalled, _ := json.Marshal(headers)
-	attrs = append(attrs, slog.String("http.request.headers.raw", string(headersJsonMarshalled)))
+	if reqHeaders.Get(headers.UserAgent) != "" {
+		attrs = append(attrs, slog.String("user_agent.original", reqHeaders.Get(headers.UserAgent)))
+	}
+
+	h := reqHeaders.Clone()
+	if h.Get(headers.Cookie) != "" {
+		h.Set(headers.Cookie, "<masked>")
+	}
+	if h.Get(headers.Authorization) != "" {
+		h.Set(headers.Authorization, "<masked>")
+	}
+	if len(h) > 0 {
+		headersJsonMarshalled, _ := json.Marshal(h)
+		attrs = append(attrs, slog.String("http.request.headers.raw", string(headersJsonMarshalled)))
+	}
 
 	attr := slog.Attr{}
 	attr.Value = slog.GroupValue(attrs...)

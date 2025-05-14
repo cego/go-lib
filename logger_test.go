@@ -15,16 +15,17 @@ func TestLogger(t *testing.T) {
 		logger := NewMockLogger()
 		logger.Debug("Epic request data is attached", GetSlogAttrFromRequest(req))
 
-		// TODO: Figure out how mock.MatchedBy is working instead of using mock.Anything
+		// TODO: Figure out how to assert slog.Attr
 		logger.AssertCalled(t, "Debug", "Epic request data is attached", mock.Anything)
 	})
 
 	t.Run("it can get err attr", func(t *testing.T) {
 		err := errors.New("test error")
 		logger := NewMockLogger()
+
 		logger.Error("Something has failed here", GetSlogAttrFromError(err))
 
-		// TODO: Figure out how mock.MatchedBy is working instead of using mock.Anything
+		// TODO: Figure out how to assert slog.Attr
 		logger.AssertCalled(t, "Error", "Something has failed here", mock.Anything)
 	})
 
