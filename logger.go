@@ -59,15 +59,13 @@ func GetSlogAttrFromRequest(req *http.Request) slog.Attr {
 	clientIp, _, _ := net.SplitHostPort(remoteAddr)
 	attrs = append(attrs, slog.String("client.ip", clientIp))
 
-	if reqHeaders.Get(headers.XForwardedFor) != "" {
-		attrs = append(attrs, slog.String("client.address", reqHeaders.Get(headers.XForwardedFor)))
-	}
-
-	if reqHeaders.Get(headers.UserAgent) != "" {
-		attrs = append(attrs, slog.String("user_agent.original", reqHeaders.Get(headers.UserAgent)))
-	}
-
 	h := reqHeaders.Clone()
+	if h.Get(headers.XForwardedFor) != "" {
+		attrs = append(attrs, slog.String("client.address", h.Get(headers.XForwardedFor)))
+	}
+	if h.Get(headers.UserAgent) != "" {
+		attrs = append(attrs, slog.String("user_agent.original", h.Get(headers.UserAgent)))
+	}	
 	if h.Get(headers.Cookie) != "" {
 		h.Set(headers.Cookie, "<masked>")
 	}
