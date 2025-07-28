@@ -38,7 +38,6 @@ handleFunc := func(writer http.ResponseWriter, request *http.Request) {
 
 // Setting your logger as the global one
 logger := log.NewLogger()
-slog.SetDefault(logger)
 slog.Debug("Also in ecs format")
 ```
 

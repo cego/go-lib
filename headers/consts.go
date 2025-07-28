@@ -5,6 +5,7 @@ const (
 	XForwardedMethod = "X-Forwarded-Method"
 	XForwardedHost   = "X-Forwarded-Host"
 	XForwardedUri    = "X-Forwarded-Uri"
+	XForwardedFor    = "X-Forwarded-For"
 	Accept           = "Accept"
 	UserAgent        = "User-Agent"
 	Cookie           = "Cookie"
