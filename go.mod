@@ -3,7 +3,7 @@ module github.com/cego/go-lib
 go 1.24.2
 
 require (
-	github.com/jarcoal/httpmock v1.4.0
+	github.com/jarcoal/httpmock v1.4.1
 	github.com/stretchr/testify v1.11.1
 )
 
