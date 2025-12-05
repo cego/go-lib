@@ -45,6 +45,13 @@ func GetSlogAttrFromRequest(req *http.Request) slog.Attr {
 
 	var attrs []slog.Attr
 
+	attrs = append(attrs, slog.String("http.request.method", req.Method))
+	attrs = append(attrs, slog.String("url.scheme", req.URL.Scheme))
+	attrs = append(attrs, slog.String("url.domain", req.URL.Hostname()))
+	attrs = append(attrs, slog.String("url.port", req.URL.Port()))
+	attrs = append(attrs, slog.String("url.path", req.URL.RawPath))
+	attrs = append(attrs, slog.String("url.query", req.URL.RawQuery))
+	attrs = append(attrs, slog.String("url.fragment", req.URL.RawFragment))
 	attrs = append(attrs, slog.String("client.ip", clientIp))
 	attrs = append(attrs, slog.String("user_agent.original", userAgent))
 	if xForwardedFor != "" {
