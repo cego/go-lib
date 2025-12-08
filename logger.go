@@ -44,10 +44,9 @@ func GetSlogAttrFromRequest(req *http.Request) slog.Attr {
 	clientIp, _, _ := net.SplitHostPort(remoteAddr)
 
 	var attrs []slog.Attr
-
 	attrs = append(attrs, slog.String("url.original", req.RequestURI))
 	attrs = append(attrs, slog.String("http.request.method", req.Method))
-	attrs = append(attrs, slog.String("url.domain", req.URL.Scheme))
+	attrs = append(attrs, slog.String("url.scheme", req.URL.Scheme))
 	attrs = append(attrs, slog.String("url.domain", req.URL.Hostname()))
 	attrs = append(attrs, slog.String("url.port", req.URL.Port()))
 	attrs = append(attrs, slog.String("url.path", req.URL.RawPath))
