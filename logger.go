@@ -44,7 +44,10 @@ func GetSlogAttrFromRequest(req *http.Request) slog.Attr {
 	clientIp, _, _ := net.SplitHostPort(remoteAddr)
 
 	var attrs []slog.Attr
-
+	attrs = append(attrs, slog.String("url.original", req.RequestURI))
+	attrs = append(attrs, slog.String("http.request.method", req.Method))
+	attrs = append(attrs, slog.String("url.path", req.URL.Path))
+	attrs = append(attrs, slog.String("url.query", req.URL.Query().Encode()))
 	attrs = append(attrs, slog.String("client.ip", clientIp))
 	attrs = append(attrs, slog.String("user_agent.original", userAgent))
 	if xForwardedFor != "" {
