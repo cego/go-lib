@@ -11,7 +11,7 @@ import (
 
 type OptionsForwardAuthFunc func(f *ForwardAuth)
 
-func WithHTTPClient(httpClient *http.Client) OptionsForwardAuthFunc {
+func ForwardAuthWithHTTPClient(httpClient *http.Client) OptionsForwardAuthFunc {
 	return func(f *ForwardAuth) {
 		f.httpClient = httpClient
 	}
@@ -55,8 +55,8 @@ func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 		}
 
 		proto := "https"
-		if req.Header.Get(headers.XForwardedProto) != "" {
-			proto = req.Header.Get(headers.XForwardedProto)
+		if r.Header.Get(headers.XForwardedProto) != "" {
+			proto = r.Header.Get(headers.XForwardedProto)
 		}
 
 		req.Header.Set(headers.XForwardedMethod, r.Method)
@@ -71,7 +71,7 @@ func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 		passwordInUrl, passwordInUrlOk := r.URL.User.Password()
 		if req.Header.Get(headers.Authorization) == "" && passwordInUrlOk {
 			usernameInUrl := r.URL.User.Username()
-			usernamePasswordEncoded := base64.URLEncoding.EncodeToString([]byte(usernameInUrl + ":" + passwordInUrl))
+			usernamePasswordEncoded := base64.StdEncoding.EncodeToString([]byte(usernameInUrl + ":" + passwordInUrl))
 			req.Header.Set(headers.Authorization, "Basic "+usernamePasswordEncoded)
 		}
 
