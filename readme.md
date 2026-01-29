@@ -63,4 +63,4 @@ mux.Handle("/data", forwardAuth.Handler(reverseProxy))
 mux.Handle("/data", forwardAuth.HandlerFunc(func (w http.ResponseWrite, req *http.Request) {
 	_,_ = w.Write()
 }))
-````
+```
