@@ -3,9 +3,9 @@ package cego
 import (
 	"encoding/json"
 	"net/http"
-)
 
-const ContentType = "Content-Type"
+	"github.com/cego/go-lib/headers"
+)
 
 type Renderer struct {
 	logger Logger
@@ -16,7 +16,7 @@ func NewRenderer(logger Logger) *Renderer {
 }
 
 func (r *Renderer) JSON(writer http.ResponseWriter, status int, data interface{}) {
-	writer.Header().Set(ContentType, "application/json; charset=utf-8")
+	writer.Header().Set(headers.ContentType, "application/json; charset=utf-8")
 	writer.WriteHeader(status)
 
 	err := json.NewEncoder(writer).Encode(data)
@@ -27,7 +27,7 @@ func (r *Renderer) JSON(writer http.ResponseWriter, status int, data interface{}
 }
 
 func (r *Renderer) Text(writer http.ResponseWriter, status int, text string) {
-	writer.Header().Set(ContentType, "text/plain; charset=utf-8")
+	writer.Header().Set(headers.ContentType, "text/plain; charset=utf-8")
 	writer.WriteHeader(status)
 
 	_, err := writer.Write([]byte(text))
@@ -38,7 +38,7 @@ func (r *Renderer) Text(writer http.ResponseWriter, status int, text string) {
 }
 
 func (r *Renderer) Data(writer http.ResponseWriter, status int, bytes []byte, contentType string) {
-	writer.Header().Set(ContentType, contentType)
+	writer.Header().Set(headers.ContentType, contentType)
 	writer.WriteHeader(status)
 
 	_, err := writer.Write(bytes)
