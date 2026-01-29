@@ -30,7 +30,7 @@ logger := cego.NewLogger()
 logger.Debug("Very nice")
 
 err := error.Error("An error")
-logger.Error(err.Error)
+logger.Error("An error occured in readme", cego.GetSlogAttrFromError(err))
 
 handleFunc := func(writer http.ResponseWriter, request *http.Request) {
     logger.Debug("Very nice", cego.GetSlogAttrFromRequest(request))
@@ -42,7 +42,7 @@ slog.SetDefault(logger)
 slog.Debug("Also in ecs format")
 ```
 
-## Using Renderer
+## Using Renderer with builtin logging
 ```go
 logger := cego.NewLogger()
 renderer := cego.NewRenderer(logger)
