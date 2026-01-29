@@ -18,7 +18,7 @@ logger := cego.NewLogger()
 logger.Debug("Very nice")
 
 err := error.Error("An error")
-logger.Error("An error occured in readme", cego.GetSlogAttrFromError(err))
+logger.Error("An error occurred in readme", cego.GetSlogAttrFromError(err))
 
 handleFunc := func(writer http.ResponseWriter, request *http.Request) {
     logger.Debug("Very nice", cego.GetSlogAttrFromRequest(request))
