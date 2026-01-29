@@ -34,8 +34,8 @@ func TestForwardAuthHandler(t *testing.T) {
 		f := cego.NewForwardAuth(logger, "https://sso.example.com/auth", "example.com", cego.ForwardAuthWithHTTPClient(httpClient))
 		f.Handler(allGoodHandler).ServeHTTP(response, request)
 
-		assert.Equal(t, response.Code, 200)
-		assert.Equal(t, response.Body.String(), "All good !!!")
+		assert.Equal(t, 200, response.Code)
+		assert.Equal(t, "All good !!!", response.Body.String())
 	})
 
 	t.Run("forward auth handlerfunc passthrough", func(t *testing.T) {
@@ -52,8 +52,8 @@ func TestForwardAuthHandler(t *testing.T) {
 			_, _ = w.Write([]byte("All good !!!"))
 		}).ServeHTTP(response, request)
 
-		assert.Equal(t, response.Code, 200)
-		assert.Equal(t, response.Body.String(), "All good !!!")
+		assert.Equal(t, 200, response.Code)
+		assert.Equal(t, "All good !!!", response.Body.String())
 	})
 
 	t.Run("forward auth handler unauthorized", func(t *testing.T) {
