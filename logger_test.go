@@ -1,4 +1,4 @@
-package cego
+package cego_test
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	cego "github.com/cego/go-lib"
 	"github.com/cego/go-lib/headers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -14,7 +15,7 @@ import (
 
 func TestLogger(t *testing.T) {
 	t.Run("it constructs", func(t *testing.T) {
-		logger := NewLogger()
+		logger := cego.NewLogger()
 		logger.Debug("debug")
 		assert.NotNil(t, logger)
 	})
@@ -26,11 +27,11 @@ func TestLogger(t *testing.T) {
 		req.Header.Set(headers.UserAgent, "curl/8.7")
 		req.Header.Set(headers.Cookie, "verysecretstuff")
 		req.Header.Set(headers.Authorization, "alsoverysecretstuff")
-		logger := NewMockLogger()
+		logger := cego.NewMockLogger()
 		logger.On("Debug", mock.Anything, mock.Anything).Return()
 
 		// Do
-		logger.Debug("Epic request data is attached", GetSlogAttrFromRequest(req))
+		logger.Debug("Epic request data is attached", cego.GetSlogAttrFromRequest(req))
 
 		// Assert
 		validators := map[string]func(string) bool{
@@ -47,11 +48,11 @@ func TestLogger(t *testing.T) {
 	t.Run("it can get err attr", func(t *testing.T) {
 		// Prepare
 		err := errors.New("test error")
-		logger := NewMockLogger()
+		logger := cego.NewMockLogger()
 		logger.On("Error", mock.Anything, mock.Anything).Return()
 
 		// Do
-		logger.Error("Something has failed here", GetSlogAttrFromError(err))
+		logger.Error("Something has failed here", cego.GetSlogAttrFromError(err))
 
 		// Assert
 		validators := map[string]func(string) bool{

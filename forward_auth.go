@@ -11,7 +11,7 @@ import (
 
 type OptionsForwardAuthFunc func(f *ForwardAuth)
 
-func WithHTTPClient(httpClient *http.Client) OptionsForwardAuthFunc {
+func ForwardAuthWithHTTPClient(httpClient *http.Client) OptionsForwardAuthFunc {
 	return func(f *ForwardAuth) {
 		f.httpClient = httpClient
 	}

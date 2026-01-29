@@ -11,18 +11,6 @@
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=cego_go-lib&metric=code_smells)](https://sonarcloud.io/dashboard?id=cego_go-lib)
 [![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=cego_go-lib&metric=duplicated_lines_density)](https://sonarcloud.io/dashboard?id=cego_go-lib)
 
-## Using ForwardAuthHandler
-
-```go
-mux := http.NewServeMux()
-forwardAuth := cego.NewForwardAuth(logger, "https://sso.example.com/auth", "myservice.example.com")
-
-mux.Handle("/data", forwardAuth.Handler(reverseProxy))
-mux.Handle("/data", forwardAuth.HandlerFunc(func (w http.ResponseWrite, req *http.Request) {
-	_,_ = w.Write()
-}))
-```
-
 ## Using Logger
 ```go
 logger := cego.NewLogger()
@@ -50,3 +38,29 @@ handleFunc := func(writer http.ResponseWriter, request *http.Request) {
     renderer.Text(w, http.StatusOK, "Action package excitement !!!")
 }
 ```
+
+## Using ForwardAuthHandler
+
+### Use builtin http client (timeout 10s)
+
+```go
+mux := http.NewServeMux()
+forwardAuth := cego.NewForwardAuth(logger, "https://sso.example.com/auth", "myservice.example.com")
+
+mux.Handle("/data", forwardAuth.Handler(reverseProxy))
+mux.Handle("/data", forwardAuth.HandlerFunc(func (w http.ResponseWrite, req *http.Request) {
+	_,_ = w.Write()
+}))
+```
+
+### Bring your own http client
+```go
+mux := http.NewServeMux()
+httpClient := &http.Client{Timeout: time.Duration(1) * time.Second}
+forwardAuth := cego.NewForwardAuth(logger, "https://sso.example.com/auth", "myservice.example.com", cego.ForwardAuthWithHTTPClient(httpClient))
+
+mux.Handle("/data", forwardAuth.Handler(reverseProxy))
+mux.Handle("/data", forwardAuth.HandlerFunc(func (w http.ResponseWrite, req *http.Request) {
+	_,_ = w.Write()
+}))
+````

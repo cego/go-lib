@@ -1,4 +1,4 @@
-package cego
+package cego_test
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	cego "github.com/cego/go-lib"
 	"github.com/cego/go-lib/headers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -30,8 +31,8 @@ func (f *FaultyResponseWriter) WriteHeader(int) {}
 
 func TestRenderer(t *testing.T) {
 	t.Run("JSON renders correctly", func(t *testing.T) {
-		logger := &MockLogger{}
-		renderer := NewRenderer(logger)
+		logger := &cego.MockLogger{}
+		renderer := cego.NewRenderer(logger)
 		rec := httptest.NewRecorder()
 
 		data := map[string]string{"foo": "bar"}
@@ -43,8 +44,8 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("JSON logs error on encoding failure", func(t *testing.T) {
-		logger := &MockLogger{}
-		renderer := NewRenderer(logger)
+		logger := &cego.MockLogger{}
+		renderer := cego.NewRenderer(logger)
 		rec := httptest.NewRecorder()
 
 		// Channel cannot be marshaled to JSON
@@ -60,8 +61,8 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("JSON logs error on write failure", func(t *testing.T) {
-		logger := &MockLogger{}
-		renderer := NewRenderer(logger)
+		logger := &cego.MockLogger{}
+		renderer := cego.NewRenderer(logger)
 		rec := &FaultyResponseWriter{}
 
 		logger.On("Error", "forced write error", mock.Anything).Return()
@@ -72,8 +73,8 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("Text renders correctly", func(t *testing.T) {
-		logger := &MockLogger{}
-		renderer := NewRenderer(logger)
+		logger := &cego.MockLogger{}
+		renderer := cego.NewRenderer(logger)
 		rec := httptest.NewRecorder()
 
 		renderer.Text(rec, http.StatusTeapot, "I am a teapot")
@@ -84,8 +85,8 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("Text logs error on write failure", func(t *testing.T) {
-		logger := &MockLogger{}
-		renderer := NewRenderer(logger)
+		logger := &cego.MockLogger{}
+		renderer := cego.NewRenderer(logger)
 		rec := &FaultyResponseWriter{}
 
 		logger.On("Error", "forced write error", mock.Anything).Return()
@@ -96,8 +97,8 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("Data renders correctly", func(t *testing.T) {
-		logger := &MockLogger{}
-		renderer := NewRenderer(logger)
+		logger := &cego.MockLogger{}
+		renderer := cego.NewRenderer(logger)
 		rec := httptest.NewRecorder()
 
 		renderer.Data(rec, http.StatusOK, []byte{0x01, 0x02}, "application/octet-stream")
@@ -108,8 +109,8 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("Data logs error on write failure", func(t *testing.T) {
-		logger := &MockLogger{}
-		renderer := NewRenderer(logger)
+		logger := &cego.MockLogger{}
+		renderer := cego.NewRenderer(logger)
 		rec := &FaultyResponseWriter{}
 
 		logger.On("Error", "forced write error", mock.Anything).Return()
