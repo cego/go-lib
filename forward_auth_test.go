@@ -61,7 +61,7 @@ func TestForwardAuthHandler(t *testing.T) {
 		logger := cego.NewMockLogger()
 		httpmock.Activate(t)
 		defer httpmock.Reset()
-		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(401, "Did you sent a cookie?"))
+		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(401, "Did you send a cookie?"))
 
 		request, _ := http.NewRequest(http.MethodGet, "/someurl", nil)
 		response := httptest.NewRecorder()
@@ -69,8 +69,8 @@ func TestForwardAuthHandler(t *testing.T) {
 		f := cego.NewForwardAuth(logger, "https://sso.example.com/auth", "example.com")
 		f.Handler(allGoodHandler).ServeHTTP(response, request)
 
-		assert.Equal(t, response.Code, 401)
-		assert.Equal(t, response.Body.String(), "Did you sent a cookie?")
+		assert.Equal(t, 401, response.Code)
+		assert.Equal(t, "Did you send a cookie?", response.Body.String())
 	})
 
 	t.Run("forward auth handler forbidden", func(t *testing.T) {
@@ -86,7 +86,7 @@ func TestForwardAuthHandler(t *testing.T) {
 		f := cego.NewForwardAuth(logger, "https://sso.example.com/auth", "example.com")
 		f.Handler(allGoodHandler).ServeHTTP(response, request)
 
-		assert.Equal(t, response.Code, 403)
-		assert.Equal(t, response.Body.String(), "Valid login, but you have been forbidden")
+		assert.Equal(t, 403, response.Code)
+		assert.Equal(t, "Valid login, but you have been forbidden", response.Body.String())
 	})
 }
