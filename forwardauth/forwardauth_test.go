@@ -12,12 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const testHost = "example.com"
+const (
+	testHost    = "example.com"
+	testAuthURL = "https://sso.example.com/auth"
+	testPath    = "/someurl"
+	allGoodMsg  = "All good !!!"
+)
 
 type TestAllGoodHandler struct{}
 
 func (t *TestAllGoodHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-	_, _ = w.Write([]byte("All good !!!"))
+	_, _ = w.Write([]byte(allGoodMsg))
 }
 
 func TestForwardAuthHandler(t *testing.T) {
@@ -26,37 +31,37 @@ func TestForwardAuthHandler(t *testing.T) {
 		l := logger.NewMock()
 		httpmock.Activate(t)
 		defer httpmock.Reset()
-		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(200, "Cookie n' ACL matches let him in"))
+		httpmock.RegisterResponder("GET", testAuthURL, httpmock.NewStringResponder(200, "Cookie n' ACL matches let him in"))
 
-		request, _ := http.NewRequest(http.MethodGet, "/someurl", nil)
+		request, _ := http.NewRequest(http.MethodGet, testPath, nil)
 		response := httptest.NewRecorder()
 
 		httpClient := &http.Client{
 			Timeout: time.Second * 5,
 		}
-		f := forwardauth.New(l, "https://sso.example.com/auth", "example.com", forwardauth.WithHTTPClient(httpClient))
+		f := forwardauth.New(l, testAuthURL, testHost, forwardauth.WithHTTPClient(httpClient))
 		f.Handler(allGoodHandler).ServeHTTP(response, request)
 
 		assert.Equal(t, 200, response.Code)
-		assert.Equal(t, "All good !!!", response.Body.String())
+		assert.Equal(t, allGoodMsg, response.Body.String())
 	})
 
 	t.Run("forward auth handlerfunc passthrough", func(t *testing.T) {
 		l := logger.NewMock()
 		httpmock.Activate(t)
 		defer httpmock.Reset()
-		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(200, "Cookie n' ACL matches let him in"))
+		httpmock.RegisterResponder("GET", testAuthURL, httpmock.NewStringResponder(200, "Cookie n' ACL matches let him in"))
 
-		request, _ := http.NewRequest(http.MethodGet, "/someurl", nil)
+		request, _ := http.NewRequest(http.MethodGet, testPath, nil)
 		response := httptest.NewRecorder()
 
-		f := forwardauth.New(l, "https://sso.example.com/auth", testHost)
+		f := forwardauth.New(l, testAuthURL, testHost)
 		f.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-			_, _ = w.Write([]byte("All good !!!"))
+			_, _ = w.Write([]byte(allGoodMsg))
 		}).ServeHTTP(response, request)
 
 		assert.Equal(t, 200, response.Code)
-		assert.Equal(t, "All good !!!", response.Body.String())
+		assert.Equal(t, allGoodMsg, response.Body.String())
 	})
 
 	t.Run("forward auth handler unauthorized", func(t *testing.T) {
@@ -64,12 +69,12 @@ func TestForwardAuthHandler(t *testing.T) {
 		l := logger.NewMock()
 		httpmock.Activate(t)
 		defer httpmock.Reset()
-		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(401, "Did you send a cookie?"))
+		httpmock.RegisterResponder("GET", testAuthURL, httpmock.NewStringResponder(401, "Did you send a cookie?"))
 
-		request, _ := http.NewRequest(http.MethodGet, "/someurl", nil)
+		request, _ := http.NewRequest(http.MethodGet, testPath, nil)
 		response := httptest.NewRecorder()
 
-		f := forwardauth.New(l, "https://sso.example.com/auth", testHost)
+		f := forwardauth.New(l, testAuthURL, testHost)
 		f.Handler(allGoodHandler).ServeHTTP(response, request)
 
 		assert.Equal(t, 401, response.Code)
@@ -81,12 +86,12 @@ func TestForwardAuthHandler(t *testing.T) {
 		l := logger.NewMock()
 		httpmock.Activate(t)
 		defer httpmock.Reset()
-		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(403, "Valid login, but you have been forbidden"))
+		httpmock.RegisterResponder("GET", testAuthURL, httpmock.NewStringResponder(403, "Valid login, but you have been forbidden"))
 
-		request, _ := http.NewRequest(http.MethodGet, "/someurl", nil)
+		request, _ := http.NewRequest(http.MethodGet, testPath, nil)
 		response := httptest.NewRecorder()
 
-		f := forwardauth.New(l, "https://sso.example.com/auth", testHost)
+		f := forwardauth.New(l, testAuthURL, testHost)
 		f.Handler(allGoodHandler).ServeHTTP(response, request)
 
 		assert.Equal(t, 403, response.Code)
