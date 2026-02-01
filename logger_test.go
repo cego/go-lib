@@ -20,6 +20,12 @@ func TestLogger(t *testing.T) {
 		assert.NotNil(t, logger)
 	})
 
+	t.Run("it constructs with level", func(t *testing.T) {
+		logger := cego.NewLogger().WithLogLevel(slog.LevelInfo)
+		logger.Info("info")
+		assert.NotNil(t, logger)
+	})
+
 	t.Run("it can get request attr", func(t *testing.T) {
 		// Prepare
 		req := httptest.NewRequest(http.MethodGet, "/", nil)

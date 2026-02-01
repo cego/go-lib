@@ -18,9 +18,29 @@ type Logger interface {
 	Error(message string, args ...any)
 }
 
-func NewLogger() Logger {
+type LoggerBuilder struct {
+	level  slog.Level
+	logger *slog.Logger
+}
+
+func NewLogger() *LoggerBuilder {
+	return &LoggerBuilder{
+		level: slog.LevelDebug,
+	}
+}
+
+func (b *LoggerBuilder) WithLogLevel(level slog.Level) *LoggerBuilder {
+	b.level = level
+	return b
+}
+
+func (b *LoggerBuilder) build() *slog.Logger {
+	if b.logger != nil {
+		return b.logger
+	}
+
 	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: b.level,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.MessageKey {
 				a.Key = "message"
@@ -36,7 +56,20 @@ func NewLogger() Logger {
 		},
 	}
 
-	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
+	b.logger = slog.New(slog.NewJSONHandler(os.Stdout, opts))
+	return b.logger
+}
+
+func (b *LoggerBuilder) Debug(message string, args ...any) {
+	b.build().Debug(message, args...)
+}
+
+func (b *LoggerBuilder) Info(message string, args ...any) {
+	b.build().Info(message, args...)
+}
+
+func (b *LoggerBuilder) Error(message string, args ...any) {
+	b.build().Error(message, args...)
 }
 
 func GetSlogAttrFromError(err error) slog.Attr {
