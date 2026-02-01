@@ -11,6 +11,16 @@
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=cego_go-lib&metric=code_smells)](https://sonarcloud.io/dashboard?id=cego_go-lib)
 [![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=cego_go-lib&metric=duplicated_lines_density)](https://sonarcloud.io/dashboard?id=cego_go-lib)
 
+## Installation
+```go
+import (
+    "github.com/cego/go-lib/logger"
+    "github.com/cego/go-lib/renderer"
+    "github.com/cego/go-lib/forwardauth"
+    "github.com/cego/go-lib/headers"
+)
+```
+
 ## Using Logger
 ```go
 logger := logger.New()
@@ -67,3 +77,17 @@ mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWrite, req *http.Request
 	_,_ = w.Write()
 }))
 ```
+
+## Testing with Mock Logger
+```go
+l := logger.NewMock()
+r := renderer.New(l)
+```
+
+## Headers
+```go
+req.Header.Get(headers.Authorization)
+req.Header.Get(headers.XForwardedFor)
+```
+
+Available constants: `XForwardedProto`, `XForwardedMethod`, `XForwardedHost`, `XForwardedUri`, `XForwardedFor`, `Accept`, `UserAgent`, `Cookie`, `Authorization`, `RemoteUser`, `ContentType`
