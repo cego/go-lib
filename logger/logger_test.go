@@ -21,7 +21,7 @@ func TestLogger(t *testing.T) {
 	})
 
 	t.Run("it constructs with level", func(t *testing.T) {
-		l := logger.New().WithLogLevel(slog.LevelInfo)
+		l := logger.NewWithLevel(slog.LevelInfo)
 		l.Info("info")
 		assert.NotNil(t, l)
 	})
