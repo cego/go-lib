@@ -65,6 +65,10 @@ func (b *Builder) Error(message string, args ...any) {
 	b.logger.Error(message, args...)
 }
 
+func (b *Builder) Slogger() *slog.Logger {
+	return b.logger
+}
+
 func GetSlogAttrFromError(err error) slog.Attr {
 	return slog.Group("error",
 		slog.String("message", err.Error()),

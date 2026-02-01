@@ -36,6 +36,9 @@ handleFunc := func(writer http.ResponseWriter, request *http.Request) {
 
 // With custom log level
 l := logger.New().WithLogLevel(slog.LevelInfo)
+
+// Set as global slog default
+slog.SetDefault(l.Slogger())
 ```
 
 ## Using Renderer with builtin logging
