@@ -1,4 +1,4 @@
-package cego
+package forwardauth
 
 import (
 	"encoding/base64"
@@ -7,31 +7,33 @@ import (
 	"time"
 
 	"github.com/cego/go-lib/headers"
+	"github.com/cego/go-lib/logger"
+	"github.com/cego/go-lib/renderer"
 )
 
-type OptionsForwardAuthFunc func(f *ForwardAuth)
+type OptionFunc func(f *ForwardAuth)
 
-func ForwardAuthWithHTTPClient(httpClient *http.Client) OptionsForwardAuthFunc {
+func WithHTTPClient(httpClient *http.Client) OptionFunc {
 	return func(f *ForwardAuth) {
 		f.httpClient = httpClient
 	}
 }
 
 type ForwardAuth struct {
-	logger                    Logger
-	forwardAuthUrl            string
-	forwardAuthXForwardedHost string
-	httpClient                *http.Client
-	renderer                  *Renderer
+	logger         logger.Logger
+	url            string
+	xForwardedHost string
+	httpClient     *http.Client
+	renderer       *renderer.Renderer
 }
 
-func NewForwardAuth(logger Logger, forwardAuthUrl string, forwardAuthXForwardedHost string, opts ...OptionsForwardAuthFunc) *ForwardAuth {
+func New(l logger.Logger, url string, xForwardedHost string, opts ...OptionFunc) *ForwardAuth {
 	f := &ForwardAuth{
-		logger:                    logger,
-		forwardAuthUrl:            forwardAuthUrl,
-		forwardAuthXForwardedHost: forwardAuthXForwardedHost,
-		httpClient:                &http.Client{Timeout: 10 * time.Second},
-		renderer:                  NewRenderer(logger),
+		logger:         l,
+		url:            url,
+		xForwardedHost: xForwardedHost,
+		httpClient:     &http.Client{Timeout: 10 * time.Second},
+		renderer:       renderer.New(l),
 	}
 
 	for _, opt := range opts {
@@ -47,7 +49,7 @@ func (f *ForwardAuth) HandlerFunc(handlerFunc http.HandlerFunc) http.Handler {
 
 func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		req, err := http.NewRequest("GET", f.forwardAuthUrl, nil)
+		req, err := http.NewRequest("GET", f.url, nil)
 		if err != nil {
 			f.renderer.Text(w, http.StatusInternalServerError, err.Error())
 			f.logger.Error(err.Error())
@@ -61,13 +63,12 @@ func (f *ForwardAuth) Handler(handler http.Handler) http.Handler {
 
 		req.Header.Set(headers.XForwardedMethod, r.Method)
 		req.Header.Set(headers.XForwardedProto, proto)
-		req.Header.Set(headers.XForwardedHost, f.forwardAuthXForwardedHost)
+		req.Header.Set(headers.XForwardedHost, f.xForwardedHost)
 		req.Header.Set(headers.XForwardedUri, r.URL.Path)
 		req.Header.Set(headers.UserAgent, r.Header.Get(headers.UserAgent))
 		req.Header.Set(headers.Cookie, r.Header.Get(headers.Cookie))
 		req.Header.Set(headers.Authorization, r.Header.Get(headers.Authorization))
 
-		// Convert username:password in url to Authorization Header if not already present
 		passwordInUrl, passwordInUrlOk := r.URL.User.Password()
 		if req.Header.Get(headers.Authorization) == "" && passwordInUrlOk {
 			usernameInUrl := r.URL.User.Username()

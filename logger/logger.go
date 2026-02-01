@@ -1,4 +1,4 @@
-package cego
+package logger
 
 import (
 	"encoding/json"
@@ -18,29 +18,24 @@ type Logger interface {
 	Error(message string, args ...any)
 }
 
-type LoggerBuilder struct {
-	level  slog.Level
+type Builder struct {
 	logger *slog.Logger
 }
 
-func NewLogger() *LoggerBuilder {
-	return &LoggerBuilder{
-		level: slog.LevelDebug,
+func New() *Builder {
+	return &Builder{
+		logger: newSlogger(slog.LevelDebug),
 	}
 }
 
-func (b *LoggerBuilder) WithLogLevel(level slog.Level) *LoggerBuilder {
-	b.level = level
+func (b *Builder) WithLogLevel(level slog.Level) *Builder {
+	b.logger = newSlogger(level)
 	return b
 }
 
-func (b *LoggerBuilder) build() *slog.Logger {
-	if b.logger != nil {
-		return b.logger
-	}
-
+func newSlogger(level slog.Level) *slog.Logger {
 	opts := &slog.HandlerOptions{
-		Level: b.level,
+		Level: level,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.MessageKey {
 				a.Key = "message"
@@ -55,21 +50,19 @@ func (b *LoggerBuilder) build() *slog.Logger {
 			return a
 		},
 	}
-
-	b.logger = slog.New(slog.NewJSONHandler(os.Stdout, opts))
-	return b.logger
+	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
 }
 
-func (b *LoggerBuilder) Debug(message string, args ...any) {
-	b.build().Debug(message, args...)
+func (b *Builder) Debug(message string, args ...any) {
+	b.logger.Debug(message, args...)
 }
 
-func (b *LoggerBuilder) Info(message string, args ...any) {
-	b.build().Info(message, args...)
+func (b *Builder) Info(message string, args ...any) {
+	b.logger.Info(message, args...)
 }
 
-func (b *LoggerBuilder) Error(message string, args ...any) {
-	b.build().Error(message, args...)
+func (b *Builder) Error(message string, args ...any) {
+	b.logger.Error(message, args...)
 }
 
 func GetSlogAttrFromError(err error) slog.Attr {
