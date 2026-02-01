@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testHost = "example.com"
+
 type TestAllGoodHandler struct{}
 
 func (t *TestAllGoodHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
@@ -48,7 +50,7 @@ func TestForwardAuthHandler(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/someurl", nil)
 		response := httptest.NewRecorder()
 
-		f := forwardauth.New(l, "https://sso.example.com/auth", "example.com")
+		f := forwardauth.New(l, "https://sso.example.com/auth", testHost)
 		f.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 			_, _ = w.Write([]byte("All good !!!"))
 		}).ServeHTTP(response, request)
@@ -67,7 +69,7 @@ func TestForwardAuthHandler(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/someurl", nil)
 		response := httptest.NewRecorder()
 
-		f := forwardauth.New(l, "https://sso.example.com/auth", "example.com")
+		f := forwardauth.New(l, "https://sso.example.com/auth", testHost)
 		f.Handler(allGoodHandler).ServeHTTP(response, request)
 
 		assert.Equal(t, 401, response.Code)
@@ -84,7 +86,7 @@ func TestForwardAuthHandler(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/someurl", nil)
 		response := httptest.NewRecorder()
 
-		f := forwardauth.New(l, "https://sso.example.com/auth", "example.com")
+		f := forwardauth.New(l, "https://sso.example.com/auth", testHost)
 		f.Handler(allGoodHandler).ServeHTTP(response, request)
 
 		assert.Equal(t, 403, response.Code)

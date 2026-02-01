@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+const forcedWriteError = "forced write error"
+
 type FaultyResponseWriter struct {
 	header http.Header
 }
@@ -25,10 +27,12 @@ func (f *FaultyResponseWriter) Header() http.Header {
 }
 
 func (f *FaultyResponseWriter) Write([]byte) (int, error) {
-	return 0, errors.New("forced write error")
+	return 0, errors.New(forcedWriteError)
 }
 
-func (f *FaultyResponseWriter) WriteHeader(int) {}
+func (f *FaultyResponseWriter) WriteHeader(int) {
+	// no-op: required by http.ResponseWriter interface
+}
 
 func TestRenderer(t *testing.T) {
 	t.Run("JSON renders correctly", func(t *testing.T) {
@@ -65,7 +69,7 @@ func TestRenderer(t *testing.T) {
 		r := renderer.New(l)
 		rec := &FaultyResponseWriter{}
 
-		l.On("Error", "forced write error", mock.Anything).Return()
+		l.On("Error", forcedWriteError, mock.Anything).Return()
 
 		r.JSON(rec, http.StatusOK, map[string]string{"a": "b"})
 
@@ -89,7 +93,7 @@ func TestRenderer(t *testing.T) {
 		r := renderer.New(l)
 		rec := &FaultyResponseWriter{}
 
-		l.On("Error", "forced write error", mock.Anything).Return()
+		l.On("Error", forcedWriteError, mock.Anything).Return()
 
 		r.Text(rec, http.StatusOK, "hello")
 
@@ -113,7 +117,7 @@ func TestRenderer(t *testing.T) {
 		r := renderer.New(l)
 		rec := &FaultyResponseWriter{}
 
-		l.On("Error", "forced write error", mock.Anything).Return()
+		l.On("Error", forcedWriteError, mock.Anything).Return()
 
 		r.Data(rec, http.StatusOK, []byte("test"), "text/plain")
 

@@ -65,38 +65,30 @@ func TestLogger(t *testing.T) {
 
 func MatchSlogGroup(expectedKey string, validators map[string]func(string) bool) func(any) bool {
 	return func(arg any) bool {
-		if slice, ok := arg.([]any); ok && len(slice) > 0 {
-			arg = slice[0]
-		}
-
-		a, ok := arg.(slog.Attr)
-		if !ok {
+		attr := extractSlogAttr(arg)
+		if attr == nil || attr.Key != expectedKey {
 			return false
 		}
-
-		if a.Key != expectedKey {
-			return false
-		}
-
-		satisfied := make(map[string]bool)
-		for k := range validators {
-			satisfied[k] = false
-		}
-
-		for _, attr := range a.Value.Group() {
-			if validate, exists := validators[attr.Key]; exists {
-				if validate(attr.Value.String()) {
-					satisfied[attr.Key] = true
-				}
-			}
-		}
-
-		for _, ok := range satisfied {
-			if !ok {
-				return false
-			}
-		}
-
-		return true
+		return validateAllAttrs(attr.Value.Group(), validators)
 	}
+}
+
+func extractSlogAttr(arg any) *slog.Attr {
+	if slice, ok := arg.([]any); ok && len(slice) > 0 {
+		arg = slice[0]
+	}
+	if a, ok := arg.(slog.Attr); ok {
+		return &a
+	}
+	return nil
+}
+
+func validateAllAttrs(attrs []slog.Attr, validators map[string]func(string) bool) bool {
+	satisfied := make(map[string]bool, len(validators))
+	for _, attr := range attrs {
+		if validate, exists := validators[attr.Key]; exists && validate(attr.Value.String()) {
+			satisfied[attr.Key] = true
+		}
+	}
+	return len(satisfied) == len(validators)
 }
