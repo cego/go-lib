@@ -23,21 +23,16 @@ import (
 
 ## Using Logger
 ```go
-logger := logger.New()
+l := logger.New()
 
-logger.Debug("Very nice")
+l.Debug("Very nice")
 
-err := error.Error("An error")
-logger.Error("An error occurred in readme", logger.GetSlogAttrFromError(err))
+err := errors.New("An error")
+l.Error("An error occurred in readme", logger.GetSlogAttrFromError(err))
 
 handleFunc := func(writer http.ResponseWriter, request *http.Request) {
-    logger.Debug("Very nice", logger.GetSlogAttrFromRequest(request))
+    l.Debug("Very nice", logger.GetSlogAttrFromRequest(request))
 }
-
-// Setting your logger as the global one
-l := logger.New()
-slog.SetDefault(l)
-slog.Debug("Also in ecs format")
 
 // With custom log level
 l := logger.New().WithLogLevel(slog.LevelInfo)
@@ -61,7 +56,7 @@ mux := http.NewServeMux()
 fa := forwardauth.New(l, "https://sso.example.com/auth", "myservice.example.com")
 
 mux.Handle("/data", fa.Handler(reverseProxy))
-mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWrite, req *http.Request) {
+mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWriter, req *http.Request) {
 	_,_ = w.Write()
 }))
 ```
@@ -73,7 +68,7 @@ httpClient := &http.Client{Timeout: time.Duration(1) * time.Second}
 fa := forwardauth.New(l, "https://sso.example.com/auth", "myservice.example.com", forwardauth.WithHTTPClient(httpClient))
 
 mux.Handle("/data", fa.Handler(reverseProxy))
-mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWrite, req *http.Request) {
+mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWriter, req *http.Request) {
 	_,_ = w.Write()
 }))
 ```
