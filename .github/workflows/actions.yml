@@ -33,6 +33,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@v6.2.0
+        with:
+          go-version: '1.25.6'
 
       - name: Run tests
         run: go test -coverprofile=cover.out ./...

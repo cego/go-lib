@@ -1,4 +1,4 @@
-package cego
+package logger
 
 import (
 	"encoding/json"
@@ -18,9 +18,17 @@ type Logger interface {
 	Error(message string, args ...any)
 }
 
-func NewLogger() Logger {
+func New() *slog.Logger {
+	return newSlogger(slog.LevelDebug)
+}
+
+func NewWithLevel(level slog.Level) *slog.Logger {
+	return newSlogger(level)
+}
+
+func newSlogger(level slog.Level) *slog.Logger {
 	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: level,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.MessageKey {
 				a.Key = "message"
@@ -35,7 +43,6 @@ func NewLogger() Logger {
 			return a
 		},
 	}
-
 	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
 }
 

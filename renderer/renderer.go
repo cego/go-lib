@@ -1,18 +1,19 @@
-package cego
+package renderer
 
 import (
 	"encoding/json"
 	"net/http"
 
 	"github.com/cego/go-lib/headers"
+	"github.com/cego/go-lib/logger"
 )
 
 type Renderer struct {
-	logger Logger
+	logger logger.Logger
 }
 
-func NewRenderer(logger Logger) *Renderer {
-	return &Renderer{logger: logger}
+func New(l logger.Logger) *Renderer {
+	return &Renderer{logger: l}
 }
 
 func (r *Renderer) JSON(writer http.ResponseWriter, status int, data interface{}) {

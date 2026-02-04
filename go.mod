@@ -1,6 +1,6 @@
 module github.com/cego/go-lib
 
-go 1.24.2
+go 1.25
 
 require (
 	github.com/jarcoal/httpmock v1.4.1
