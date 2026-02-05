@@ -1,6 +1,7 @@
 package slowdown_test
 
 import (
+	"crypto/tls"
 	"net"
 	"net/http"
 	"syscall"
@@ -10,6 +11,43 @@ import (
 	"github.com/cego/go-lib/v2/slowdown"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestWithDefaults(t *testing.T) {
+	t.Run("sets defaults on empty server", func(t *testing.T) {
+		srv := &http.Server{}
+		result := slowdown.WithDefaults(srv)
+
+		assert.Equal(t, slowdown.DefaultReadTimeout, result.ReadTimeout)
+		assert.Equal(t, slowdown.DefaultWriteTimeout, result.WriteTimeout)
+		assert.Equal(t, slowdown.DefaultIdleTimeout, result.IdleTimeout)
+		assert.Equal(t, slowdown.DefaultReadHeaderTimeout, result.ReadHeaderTimeout)
+		assert.NotNil(t, result.TLSConfig)
+		assert.Equal(t, slowdown.DefaultMinVersion, result.TLSConfig.MinVersion)
+	})
+
+	t.Run("preserves existing timeouts", func(t *testing.T) {
+		srv := &http.Server{
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 60 * time.Second,
+		}
+		result := slowdown.WithDefaults(srv)
+
+		assert.Equal(t, 30*time.Second, result.ReadTimeout)
+		assert.Equal(t, 60*time.Second, result.WriteTimeout)
+		assert.Equal(t, slowdown.DefaultIdleTimeout, result.IdleTimeout)
+	})
+
+	t.Run("preserves existing TLSConfig", func(t *testing.T) {
+		srv := &http.Server{
+			TLSConfig: &tls.Config{
+				MinVersion: tls.VersionTLS13,
+			},
+		}
+		result := slowdown.WithDefaults(srv)
+
+		assert.Equal(t, slowdown.DefaultMinVersion, result.TLSConfig.MinVersion)
+	})
+}
 
 func TestListenAndServe_ServerError(t *testing.T) {
 	listener, err := net.Listen("tcp", ":0")
