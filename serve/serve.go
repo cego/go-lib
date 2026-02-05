@@ -32,6 +32,8 @@ var (
 	DefaultWriteTimeout             = 10 * time.Second
 	DefaultIdleTimeout              = 120 * time.Second
 	DefaultReadHeaderTimeout        = 5 * time.Second
+	DefaultShutdownDelay            = 5 * time.Second
+	DefaultDrainTimeout             = 10 * time.Second
 )
 
 func WithDefaults(srv *http.Server) *http.Server {
@@ -60,12 +62,23 @@ func WithDefaults(srv *http.Server) *http.Server {
 }
 
 type Config struct {
-	ShutdownDelay  time.Duration
-	DrainTimeout time.Duration
-	Logger       *slog.Logger
+	ShutdownDelay time.Duration
+	DrainTimeout  time.Duration
+	Logger        *slog.Logger
+}
+
+func (c Config) withDefaults() Config {
+	if c.ShutdownDelay == 0 {
+		c.ShutdownDelay = DefaultShutdownDelay
+	}
+	if c.DrainTimeout == 0 {
+		c.DrainTimeout = DefaultDrainTimeout
+	}
+	return c
 }
 
 func ListenAndServe(srv *http.Server, cfg Config) error {
+	cfg = cfg.withDefaults()
 	serverErrors := make(chan error, 1)
 	go func() {
 		serverErrors <- srv.ListenAndServe()
@@ -105,6 +118,7 @@ func ListenAndServe(srv *http.Server, cfg Config) error {
 }
 
 func ListenAndServeTLS(srv *http.Server, certFile, keyFile string, cfg Config) error {
+	cfg = cfg.withDefaults()
 	serverErrors := make(chan error, 1)
 	go func() {
 		serverErrors <- srv.ListenAndServeTLS(certFile, keyFile)
