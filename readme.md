@@ -91,7 +91,7 @@ req.Header.Get(headers.XForwardedFor)
 
 Available constants: `XForwardedProto`, `XForwardedMethod`, `XForwardedHost`, `XForwardedUri`, `XForwardedFor`, `Accept`, `UserAgent`, `Cookie`, `Authorization`, `RemoteUser`, `ContentType`
 
-## Using Slowdown (Graceful Shutdown)
+## Using Serve (Graceful Shutdown)
 
 Drop-in replacement for `http.ListenAndServe` that handles graceful shutdown with a configurable delay for load balancer deregistration.
 
