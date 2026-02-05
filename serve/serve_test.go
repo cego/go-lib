@@ -62,7 +62,7 @@ func TestListenAndServe_ServerError(t *testing.T) {
 	defer listener2.Close()
 
 	cfg := serve.Config{
-		SignalDelay:  100 * time.Millisecond,
+		ShutdownDelay:  100 * time.Millisecond,
 		DrainTimeout: 100 * time.Millisecond,
 	}
 
@@ -74,7 +74,7 @@ func TestListenAndServe_GracefulShutdown(t *testing.T) {
 	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
 
 	cfg := serve.Config{
-		SignalDelay:  50 * time.Millisecond,
+		ShutdownDelay:  50 * time.Millisecond,
 		DrainTimeout: 100 * time.Millisecond,
 	}
 
@@ -99,7 +99,7 @@ func TestListenAndServeTLS_ServerError(t *testing.T) {
 	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
 
 	cfg := serve.Config{
-		SignalDelay:  100 * time.Millisecond,
+		ShutdownDelay:  100 * time.Millisecond,
 		DrainTimeout: 100 * time.Millisecond,
 	}
 

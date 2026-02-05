@@ -60,7 +60,7 @@ func WithDefaults(srv *http.Server) *http.Server {
 }
 
 type Config struct {
-	SignalDelay  time.Duration
+	ShutdownDelay  time.Duration
 	DrainTimeout time.Duration
 	Logger       *slog.Logger
 }
@@ -81,10 +81,10 @@ func ListenAndServe(srv *http.Server, cfg Config) error {
 		srv.SetKeepAlivesEnabled(false)
 
 		if cfg.Logger != nil {
-			cfg.Logger.Debug(fmt.Sprintf("Shutdown signal received, waiting %s for load balancer to deregister", cfg.SignalDelay))
+			cfg.Logger.Debug(fmt.Sprintf("Shutdown signal received, waiting %s for load balancer to deregister", cfg.ShutdownDelay))
 		}
 
-		time.Sleep(cfg.SignalDelay)
+		time.Sleep(cfg.ShutdownDelay)
 
 		if cfg.Logger != nil {
 			cfg.Logger.Debug("Draining existing connections")
@@ -120,10 +120,10 @@ func ListenAndServeTLS(srv *http.Server, certFile, keyFile string, cfg Config) e
 		srv.SetKeepAlivesEnabled(false)
 
 		if cfg.Logger != nil {
-			cfg.Logger.Debug(fmt.Sprintf("Shutdown signal received, waiting %s for load balancer to deregister", cfg.SignalDelay))
+			cfg.Logger.Debug(fmt.Sprintf("Shutdown signal received, waiting %s for load balancer to deregister", cfg.ShutdownDelay))
 		}
 
-		time.Sleep(cfg.SignalDelay)
+		time.Sleep(cfg.ShutdownDelay)
 
 		if cfg.Logger != nil {
 			cfg.Logger.Debug("Draining existing connections")

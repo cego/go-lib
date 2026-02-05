@@ -99,7 +99,7 @@ Drop-in replacement for `http.ListenAndServe` that handles graceful shutdown wit
 srv := serve.WithDefaults(&http.Server{Addr: ":8080", Handler: myHandler})
 
 err := serve.ListenAndServe(srv, serve.Config{
-    SignalDelay:  10 * time.Second, // Keep listening while LB deregisters
+    ShutdownDelay:  10 * time.Second, // Keep listening while LB deregisters
     DrainTimeout: 5 * time.Second,  // Time to drain in-flight requests
     Logger:       slog.Default(),   // Optional: logs shutdown phases
 })
