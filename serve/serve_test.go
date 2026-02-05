@@ -8,10 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cego/go-lib/v2/serve"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/cego/go-lib/v2/serve"
 )
 
 func TestWithDefaults(t *testing.T) {
