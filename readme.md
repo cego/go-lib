@@ -18,6 +18,7 @@ import (
     "github.com/cego/go-lib/renderer"
     "github.com/cego/go-lib/forwardauth"
     "github.com/cego/go-lib/headers"
+    "github.com/cego/go-lib/slowdown"
 )
 ```
 
@@ -89,3 +90,30 @@ req.Header.Get(headers.XForwardedFor)
 ```
 
 Available constants: `XForwardedProto`, `XForwardedMethod`, `XForwardedHost`, `XForwardedUri`, `XForwardedFor`, `Accept`, `UserAgent`, `Cookie`, `Authorization`, `RemoteUser`, `ContentType`
+
+## Using Slowdown (Graceful Shutdown)
+
+Drop-in replacement for `http.ListenAndServe` that handles graceful shutdown with a configurable delay for load balancer deregistration.
+
+```go
+srv := &http.Server{Addr: ":8080", Handler: myHandler}
+
+err := slowdown.ListenAndServe(srv, slowdown.Config{
+    SignalDelay:  10 * time.Second, // Keep listening while LB deregisters
+    DrainTimeout: 5 * time.Second,  // Time to drain in-flight requests
+})
+```
+
+With health check hook:
+```go
+var isReady atomic.Bool
+isReady.Store(true)
+
+err := slowdown.ListenAndServe(srv, slowdown.Config{
+    SignalDelay:  10 * time.Second,
+    DrainTimeout: 5 * time.Second,
+    OnSignal: func() {
+        isReady.Store(false) // Fail health checks immediately
+    },
+})
+```

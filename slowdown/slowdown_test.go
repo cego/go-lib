@@ -1,0 +1,75 @@
+package slowdown_test
+
+import (
+	"net"
+	"net/http"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/cego/go-lib/v2/slowdown"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestListenAndServe_ServerError(t *testing.T) {
+	listener, err := net.Listen("tcp", ":0")
+	assert.NoError(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
+	srv := &http.Server{Addr: ":" + string(rune(port)), Handler: http.NewServeMux()}
+	srv.Addr = listener.Addr().String()
+
+	listener2, _ := net.Listen("tcp", srv.Addr)
+	defer listener2.Close()
+
+	cfg := slowdown.Config{
+		SignalDelay:  100 * time.Millisecond,
+		DrainTimeout: 100 * time.Millisecond,
+	}
+
+	err = slowdown.ListenAndServe(srv, cfg)
+	assert.Error(t, err)
+}
+
+func TestListenAndServe_GracefulShutdown(t *testing.T) {
+	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
+
+	onSignalCalled := false
+	cfg := slowdown.Config{
+		SignalDelay:  50 * time.Millisecond,
+		DrainTimeout: 100 * time.Millisecond,
+		OnSignal: func() {
+			onSignalCalled = true
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- slowdown.ListenAndServe(srv, cfg)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+		assert.True(t, onSignalCalled)
+	case <-time.After(1 * time.Second):
+		t.Fatal("shutdown timed out")
+	}
+}
+
+func TestListenAndServeTLS_ServerError(t *testing.T) {
+	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
+
+	cfg := slowdown.Config{
+		SignalDelay:  100 * time.Millisecond,
+		DrainTimeout: 100 * time.Millisecond,
+	}
+
+	err := slowdown.ListenAndServeTLS(srv, "nonexistent.crt", "nonexistent.key", cfg)
+	assert.Error(t, err)
+}
