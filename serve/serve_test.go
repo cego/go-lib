@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cego/go-lib/v2/serve"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/cego/go-lib/v2/serve"
 )
 
 func TestWithDefaults(t *testing.T) {
@@ -51,19 +53,19 @@ func TestWithDefaults(t *testing.T) {
 
 func TestListenAndServe_ServerError(t *testing.T) {
 	listener, err := net.Listen("tcp", ":0")
-	assert.NoError(t, err)
-	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	_ = listener.Close()
 
-	srv := &http.Server{Addr: ":" + string(rune(port)), Handler: http.NewServeMux()}
-	srv.Addr = listener.Addr().String()
+	listener2, err := net.Listen("tcp", addr)
+	require.NoError(t, err)
+	defer func() { _ = listener2.Close() }()
 
-	listener2, _ := net.Listen("tcp", srv.Addr)
-	defer listener2.Close()
+	srv := &http.Server{Addr: addr, Handler: http.NewServeMux()}
 
 	cfg := serve.Config{
-		ShutdownDelay:  100 * time.Millisecond,
-		DrainTimeout: 100 * time.Millisecond,
+		ShutdownDelay: 100 * time.Millisecond,
+		DrainTimeout:  100 * time.Millisecond,
 	}
 
 	err = serve.ListenAndServe(srv, cfg)
@@ -74,8 +76,8 @@ func TestListenAndServe_GracefulShutdown(t *testing.T) {
 	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
 
 	cfg := serve.Config{
-		ShutdownDelay:  50 * time.Millisecond,
-		DrainTimeout: 100 * time.Millisecond,
+		ShutdownDelay: 50 * time.Millisecond,
+		DrainTimeout:  100 * time.Millisecond,
 	}
 
 	done := make(chan error, 1)
@@ -85,11 +87,11 @@ func TestListenAndServe_GracefulShutdown(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+	_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 
 	select {
 	case err := <-done:
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	case <-time.After(1 * time.Second):
 		t.Fatal("shutdown timed out")
 	}
@@ -99,8 +101,8 @@ func TestListenAndServeTLS_ServerError(t *testing.T) {
 	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
 
 	cfg := serve.Config{
-		ShutdownDelay:  100 * time.Millisecond,
-		DrainTimeout: 100 * time.Millisecond,
+		ShutdownDelay: 100 * time.Millisecond,
+		DrainTimeout:  100 * time.Millisecond,
 	}
 
 	err := serve.ListenAndServeTLS(srv, "nonexistent.crt", "nonexistent.key", cfg)
