@@ -14,6 +14,7 @@ type Config struct {
 	SignalDelay  time.Duration
 	DrainTimeout time.Duration
 	OnSignal     func()
+	OnDrain      func()
 }
 
 func ListenAndServe(srv *http.Server, cfg Config) error {
@@ -36,6 +37,10 @@ func ListenAndServe(srv *http.Server, cfg Config) error {
 		}
 
 		time.Sleep(cfg.SignalDelay)
+
+		if cfg.OnDrain != nil {
+			cfg.OnDrain()
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.DrainTimeout)
 		defer cancel()
@@ -67,6 +72,10 @@ func ListenAndServeTLS(srv *http.Server, certFile, keyFile string, cfg Config) e
 		}
 
 		time.Sleep(cfg.SignalDelay)
+
+		if cfg.OnDrain != nil {
+			cfg.OnDrain()
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.DrainTimeout)
 		defer cancel()

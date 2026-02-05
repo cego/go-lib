@@ -104,16 +104,16 @@ err := slowdown.ListenAndServe(srv, slowdown.Config{
 })
 ```
 
-With health check hook:
+With callbacks:
 ```go
-var isReady atomic.Bool
-isReady.Store(true)
-
 err := slowdown.ListenAndServe(srv, slowdown.Config{
     SignalDelay:  10 * time.Second,
     DrainTimeout: 5 * time.Second,
     OnSignal: func() {
-        isReady.Store(false) // Fail health checks immediately
+        logger.Debug("Signal received, waiting for LB to deregister")
+    },
+    OnDrain: func() {
+        logger.Debug("Draining existing connections")
     },
 })
 ```
