@@ -18,7 +18,7 @@ import (
     "github.com/cego/go-lib/renderer"
     "github.com/cego/go-lib/forwardauth"
     "github.com/cego/go-lib/headers"
-    "github.com/cego/go-lib/slowdown"
+    "github.com/cego/go-lib/serve"
 )
 ```
 
@@ -96,9 +96,9 @@ Available constants: `XForwardedProto`, `XForwardedMethod`, `XForwardedHost`, `X
 Drop-in replacement for `http.ListenAndServe` that handles graceful shutdown with a configurable delay for load balancer deregistration.
 
 ```go
-srv := slowdown.WithDefaults(&http.Server{Addr: ":8080", Handler: myHandler})
+srv := serve.WithDefaults(&http.Server{Addr: ":8080", Handler: myHandler})
 
-err := slowdown.ListenAndServe(srv, slowdown.Config{
+err := serve.ListenAndServe(srv, serve.Config{
     SignalDelay:  10 * time.Second, // Keep listening while LB deregisters
     DrainTimeout: 5 * time.Second,  // Time to drain in-flight requests
     Logger:       slog.Default(),   // Optional: logs shutdown phases

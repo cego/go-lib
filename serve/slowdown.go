@@ -1,4 +1,4 @@
-package slowdown
+package serve
 
 import (
 	"context"
