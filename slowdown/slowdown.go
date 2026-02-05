@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -61,8 +62,7 @@ func WithDefaults(srv *http.Server) *http.Server {
 type Config struct {
 	SignalDelay  time.Duration
 	DrainTimeout time.Duration
-	OnSignal     func()
-	OnDrain      func()
+	Logger       *slog.Logger
 }
 
 func ListenAndServe(srv *http.Server, cfg Config) error {
@@ -80,14 +80,14 @@ func ListenAndServe(srv *http.Server, cfg Config) error {
 	case <-stop:
 		srv.SetKeepAlivesEnabled(false)
 
-		if cfg.OnSignal != nil {
-			cfg.OnSignal()
+		if cfg.Logger != nil {
+			cfg.Logger.Debug(fmt.Sprintf("Shutdown signal received, waiting %s for load balancer to deregister", cfg.SignalDelay))
 		}
 
 		time.Sleep(cfg.SignalDelay)
 
-		if cfg.OnDrain != nil {
-			cfg.OnDrain()
+		if cfg.Logger != nil {
+			cfg.Logger.Debug("Draining existing connections")
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.DrainTimeout)
@@ -95,6 +95,10 @@ func ListenAndServe(srv *http.Server, cfg Config) error {
 
 		if err := srv.Shutdown(ctx); err != nil {
 			return fmt.Errorf("shutdown failed: %w", err)
+		}
+
+		if cfg.Logger != nil {
+			cfg.Logger.Debug("Server shutdown complete")
 		}
 	}
 	return nil
@@ -115,14 +119,14 @@ func ListenAndServeTLS(srv *http.Server, certFile, keyFile string, cfg Config) e
 	case <-stop:
 		srv.SetKeepAlivesEnabled(false)
 
-		if cfg.OnSignal != nil {
-			cfg.OnSignal()
+		if cfg.Logger != nil {
+			cfg.Logger.Debug(fmt.Sprintf("Shutdown signal received, waiting %s for load balancer to deregister", cfg.SignalDelay))
 		}
 
 		time.Sleep(cfg.SignalDelay)
 
-		if cfg.OnDrain != nil {
-			cfg.OnDrain()
+		if cfg.Logger != nil {
+			cfg.Logger.Debug("Draining existing connections")
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.DrainTimeout)
@@ -130,6 +134,10 @@ func ListenAndServeTLS(srv *http.Server, certFile, keyFile string, cfg Config) e
 
 		if err := srv.Shutdown(ctx); err != nil {
 			return fmt.Errorf("shutdown failed: %w", err)
+		}
+
+		if cfg.Logger != nil {
+			cfg.Logger.Debug("Server shutdown complete")
 		}
 	}
 	return nil

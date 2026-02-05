@@ -96,24 +96,11 @@ Available constants: `XForwardedProto`, `XForwardedMethod`, `XForwardedHost`, `X
 Drop-in replacement for `http.ListenAndServe` that handles graceful shutdown with a configurable delay for load balancer deregistration.
 
 ```go
-srv := &http.Server{Addr: ":8080", Handler: myHandler}
+srv := slowdown.WithDefaults(&http.Server{Addr: ":8080", Handler: myHandler})
 
 err := slowdown.ListenAndServe(srv, slowdown.Config{
     SignalDelay:  10 * time.Second, // Keep listening while LB deregisters
     DrainTimeout: 5 * time.Second,  // Time to drain in-flight requests
-})
-```
-
-With callbacks:
-```go
-err := slowdown.ListenAndServe(srv, slowdown.Config{
-    SignalDelay:  10 * time.Second,
-    DrainTimeout: 5 * time.Second,
-    OnSignal: func() {
-        logger.Debug("Signal received, waiting for LB to deregister")
-    },
-    OnDrain: func() {
-        logger.Debug("Draining existing connections")
-    },
+    Logger:       slog.Default(),   // Optional: logs shutdown phases
 })
 ```

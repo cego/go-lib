@@ -73,17 +73,9 @@ func TestListenAndServe_ServerError(t *testing.T) {
 func TestListenAndServe_GracefulShutdown(t *testing.T) {
 	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
 
-	onSignalCalled := false
-	onDrainCalled := false
 	cfg := slowdown.Config{
 		SignalDelay:  50 * time.Millisecond,
 		DrainTimeout: 100 * time.Millisecond,
-		OnSignal: func() {
-			onSignalCalled = true
-		},
-		OnDrain: func() {
-			onDrainCalled = true
-		},
 	}
 
 	done := make(chan error, 1)
@@ -98,8 +90,6 @@ func TestListenAndServe_GracefulShutdown(t *testing.T) {
 	select {
 	case err := <-done:
 		assert.NoError(t, err)
-		assert.True(t, onSignalCalled)
-		assert.True(t, onDrainCalled)
 	case <-time.After(1 * time.Second):
 		t.Fatal("shutdown timed out")
 	}
