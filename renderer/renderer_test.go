@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/cego/go-lib/headers"
-	"github.com/cego/go-lib/logger"
-	"github.com/cego/go-lib/renderer"
+	"github.com/cego/go-lib/v2/headers"
+	"github.com/cego/go-lib/v2/logger"
+	"github.com/cego/go-lib/v2/renderer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

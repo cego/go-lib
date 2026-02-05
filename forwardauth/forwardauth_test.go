@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cego/go-lib/forwardauth"
-	"github.com/cego/go-lib/logger"
+	"github.com/cego/go-lib/v2/forwardauth"
+	"github.com/cego/go-lib/v2/logger"
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/assert"
 )

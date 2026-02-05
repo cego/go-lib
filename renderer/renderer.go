@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/cego/go-lib/headers"
-	"github.com/cego/go-lib/logger"
+	"github.com/cego/go-lib/v2/headers"
+	"github.com/cego/go-lib/v2/logger"
 )
 
 type Renderer struct {

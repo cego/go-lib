@@ -9,7 +9,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/cego/go-lib/headers"
+	"github.com/cego/go-lib/v2/headers"
 )
 
 type Logger interface {

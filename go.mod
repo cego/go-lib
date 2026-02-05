@@ -1,4 +1,4 @@
-module github.com/cego/go-lib
+module github.com/cego/go-lib/v2
 
 go 1.25
 
