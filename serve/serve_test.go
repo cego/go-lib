@@ -2,6 +2,7 @@ package serve_test
 
 import (
 	"crypto/tls"
+	"log/slog"
 	"net"
 	"net/http"
 	"syscall"
@@ -82,6 +83,55 @@ func TestListenAndServe_GracefulShutdown(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		done <- serve.ListenAndServe(srv, cfg)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(1 * time.Second):
+		t.Fatal("shutdown timed out")
+	}
+}
+
+func TestListenAndServe_GracefulShutdownWithLogger(t *testing.T) {
+	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
+
+	cfg := serve.Config{
+		ShutdownDelay: 50 * time.Millisecond,
+		DrainTimeout:  100 * time.Millisecond,
+		Logger:        slog.Default(),
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- serve.ListenAndServe(srv, cfg)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(1 * time.Second):
+		t.Fatal("shutdown timed out")
+	}
+}
+
+func TestListenAndServe_DefaultConfig(t *testing.T) {
+	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- serve.ListenAndServe(srv, serve.Config{
+			ShutdownDelay: 50 * time.Millisecond,
+			DrainTimeout:  100 * time.Millisecond,
+		})
 	}()
 
 	time.Sleep(50 * time.Millisecond)

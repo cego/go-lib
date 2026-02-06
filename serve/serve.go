@@ -78,54 +78,25 @@ func (c Config) withDefaults() Config {
 }
 
 func ListenAndServe(srv *http.Server, cfg Config) error {
-	cfg = cfg.withDefaults()
-	serverErrors := make(chan error, 1)
-	go func() {
-		serverErrors <- srv.ListenAndServe()
-	}()
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case err := <-serverErrors:
-		return err
-	case <-stop:
-		srv.SetKeepAlivesEnabled(false)
-
-		if cfg.Logger != nil {
-			cfg.Logger.Debug(fmt.Sprintf("Shutdown signal received, waiting %s for load balancer to deregister", cfg.ShutdownDelay))
-		}
-
-		time.Sleep(cfg.ShutdownDelay)
-
-		if cfg.Logger != nil {
-			cfg.Logger.Debug("Draining existing connections")
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), cfg.DrainTimeout)
-		defer cancel()
-
-		if err := srv.Shutdown(ctx); err != nil {
-			return fmt.Errorf("shutdown failed: %w", err)
-		}
-
-		if cfg.Logger != nil {
-			cfg.Logger.Debug("Server shutdown complete")
-		}
-	}
-	return nil
+	return listenAndShutdown(srv, srv.ListenAndServe, cfg)
 }
 
 func ListenAndServeTLS(srv *http.Server, certFile, keyFile string, cfg Config) error {
+	return listenAndShutdown(srv, func() error {
+		return srv.ListenAndServeTLS(certFile, keyFile)
+	}, cfg)
+}
+
+func listenAndShutdown(srv *http.Server, startFn func() error, cfg Config) error {
 	cfg = cfg.withDefaults()
 	serverErrors := make(chan error, 1)
 	go func() {
-		serverErrors <- srv.ListenAndServeTLS(certFile, keyFile)
+		serverErrors <- startFn()
 	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(stop)
 
 	select {
 	case err := <-serverErrors:
