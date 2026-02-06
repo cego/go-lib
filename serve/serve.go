@@ -45,12 +45,12 @@ func WithDefaults(srv *http.Server) *Server {
 }
 
 func ListenAndServe(ctx context.Context, srv *Server, logger *slog.Logger) error {
-	return listenAndShutdown(ctx, srv, logger, srv.Server.ListenAndServe)
+	return listenAndShutdown(ctx, srv, logger, srv.ListenAndServe)
 }
 
 func ListenAndServeTLS(ctx context.Context, srv *Server, logger *slog.Logger, certFile, keyFile string) error {
 	return listenAndShutdown(ctx, srv, logger, func() error {
-		return srv.Server.ListenAndServeTLS(certFile, keyFile)
+		return srv.ListenAndServeTLS(certFile, keyFile)
 	})
 }
 
