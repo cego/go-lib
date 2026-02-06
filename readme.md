@@ -14,10 +14,11 @@
 ## Installation
 ```go
 import (
-    "github.com/cego/go-lib/logger"
-    "github.com/cego/go-lib/renderer"
-    "github.com/cego/go-lib/forwardauth"
-    "github.com/cego/go-lib/headers"
+    "github.com/cego/go-lib/v2/logger"
+    "github.com/cego/go-lib/v2/renderer"
+    "github.com/cego/go-lib/v2/forwardauth"
+    "github.com/cego/go-lib/v2/headers"
+    "github.com/cego/go-lib/v2/serve"
 )
 ```
 
@@ -89,3 +90,16 @@ req.Header.Get(headers.XForwardedFor)
 ```
 
 Available constants: `XForwardedProto`, `XForwardedMethod`, `XForwardedHost`, `XForwardedUri`, `XForwardedFor`, `Accept`, `UserAgent`, `Cookie`, `Authorization`, `RemoteUser`, `ContentType`
+
+## Using Serve (Graceful Shutdown)
+
+Graceful HTTP server shutdown with a configurable delay for load balancer deregistration.
+
+```go
+srv := serve.WithDefaults(&http.Server{Addr: ":8080", Handler: myHandler})
+
+ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+defer stop()
+
+err := serve.ListenAndServe(ctx, srv, slog.Default())
+```
