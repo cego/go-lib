@@ -2,7 +2,6 @@ package serve
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,7 +9,6 @@ import (
 )
 
 var (
-	DefaultMinVersion        uint16 = tls.VersionTLS12
 	DefaultReadTimeout              = 5 * time.Second
 	DefaultWriteTimeout             = 10 * time.Second
 	DefaultIdleTimeout              = 120 * time.Second
@@ -20,14 +18,6 @@ var (
 )
 
 func WithDefaults(srv *http.Server) *http.Server {
-	if srv.TLSConfig == nil {
-		srv.TLSConfig = &tls.Config{}
-	}
-
-	if srv.TLSConfig.MinVersion == 0 {
-		srv.TLSConfig.MinVersion = DefaultMinVersion
-	}
-
 	if srv.ReadTimeout == 0 {
 		srv.ReadTimeout = DefaultReadTimeout
 	}

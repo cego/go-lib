@@ -2,7 +2,6 @@ package serve_test
 
 import (
 	"context"
-	"crypto/tls"
 	"log/slog"
 	"net"
 	"net/http"
@@ -25,8 +24,6 @@ func TestWithDefaults(t *testing.T) {
 		assert.Equal(t, serve.DefaultWriteTimeout, result.WriteTimeout)
 		assert.Equal(t, serve.DefaultIdleTimeout, result.IdleTimeout)
 		assert.Equal(t, serve.DefaultReadHeaderTimeout, result.ReadHeaderTimeout)
-		assert.NotNil(t, result.TLSConfig)
-		assert.Equal(t, serve.DefaultMinVersion, result.TLSConfig.MinVersion)
 	})
 
 	t.Run("preserves existing timeouts", func(t *testing.T) {
@@ -41,16 +38,6 @@ func TestWithDefaults(t *testing.T) {
 		assert.Equal(t, serve.DefaultIdleTimeout, result.IdleTimeout)
 	})
 
-	t.Run("preserves existing TLSConfig", func(t *testing.T) {
-		srv := &http.Server{
-			TLSConfig: &tls.Config{
-				MinVersion: tls.VersionTLS13,
-			},
-		}
-		result := serve.WithDefaults(srv)
-
-		assert.Equal(t, uint16(tls.VersionTLS13), result.TLSConfig.MinVersion)
-	})
 }
 
 func TestListenAndServe_ServerError(t *testing.T) {
