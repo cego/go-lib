@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 )
 
@@ -16,15 +13,6 @@ var (
 	DefaultCurvePreferences = []tls.CurveID{
 		tls.CurveP256,
 		tls.X25519,
-	}
-
-	DefaultCipherSuites = []uint16{
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	}
 
 	DefaultMinVersion        uint16 = tls.VersionTLS12
@@ -41,9 +29,12 @@ func WithDefaults(srv *http.Server) *http.Server {
 		srv.TLSConfig = &tls.Config{}
 	}
 
-	srv.TLSConfig.MinVersion = DefaultMinVersion
-	srv.TLSConfig.CurvePreferences = DefaultCurvePreferences
-	srv.TLSConfig.CipherSuites = DefaultCipherSuites
+	if srv.TLSConfig.MinVersion == 0 {
+		srv.TLSConfig.MinVersion = DefaultMinVersion
+	}
+	if srv.TLSConfig.CurvePreferences == nil {
+		srv.TLSConfig.CurvePreferences = DefaultCurvePreferences
+	}
 
 	if srv.ReadTimeout == 0 {
 		srv.ReadTimeout = DefaultReadTimeout
@@ -77,52 +68,46 @@ func (c Config) withDefaults() Config {
 	return c
 }
 
-func ListenAndServe(srv *http.Server, cfg Config) error {
-	return listenAndShutdown(srv, srv.ListenAndServe, cfg)
+func ListenAndServe(ctx context.Context, srv *http.Server, cfg Config) error {
+	return listenAndShutdown(ctx, srv, srv.ListenAndServe, cfg)
 }
 
-func ListenAndServeTLS(srv *http.Server, certFile, keyFile string, cfg Config) error {
-	return listenAndShutdown(srv, func() error {
+func ListenAndServeTLS(ctx context.Context, srv *http.Server, certFile, keyFile string, cfg Config) error {
+	return listenAndShutdown(ctx, srv, func() error {
 		return srv.ListenAndServeTLS(certFile, keyFile)
 	}, cfg)
 }
 
-func listenAndShutdown(srv *http.Server, startFn func() error, cfg Config) error {
+func listenAndShutdown(ctx context.Context, srv *http.Server, startFn func() error, cfg Config) error {
 	cfg = cfg.withDefaults()
 	serverErrors := make(chan error, 1)
 	go func() {
 		serverErrors <- startFn()
 	}()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(stop)
-
 	select {
 	case err := <-serverErrors:
 		return err
-	case <-stop:
-		srv.SetKeepAlivesEnabled(false)
-
+	case <-ctx.Done():
 		if cfg.Logger != nil {
-			cfg.Logger.Debug(fmt.Sprintf("Shutdown signal received, waiting %s for load balancer to deregister", cfg.ShutdownDelay))
+			cfg.Logger.Debug("shutdown signal received, waiting for load balancer to deregister", "delay", cfg.ShutdownDelay)
 		}
 
 		time.Sleep(cfg.ShutdownDelay)
 
 		if cfg.Logger != nil {
-			cfg.Logger.Debug("Draining existing connections")
+			cfg.Logger.Debug("draining existing connections")
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), cfg.DrainTimeout)
+		drainCtx, cancel := context.WithTimeout(context.Background(), cfg.DrainTimeout)
 		defer cancel()
 
-		if err := srv.Shutdown(ctx); err != nil {
+		if err := srv.Shutdown(drainCtx); err != nil {
 			return fmt.Errorf("shutdown failed: %w", err)
 		}
 
 		if cfg.Logger != nil {
-			cfg.Logger.Debug("Server shutdown complete")
+			cfg.Logger.Debug("server shutdown complete")
 		}
 	}
 	return nil
