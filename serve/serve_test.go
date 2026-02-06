@@ -37,7 +37,6 @@ func TestWithDefaults(t *testing.T) {
 		assert.Equal(t, 60*time.Second, result.WriteTimeout)
 		assert.Equal(t, serve.DefaultIdleTimeout, result.IdleTimeout)
 	})
-
 }
 
 func TestListenAndServe_ServerError(t *testing.T) {
@@ -57,7 +56,7 @@ func TestListenAndServe_ServerError(t *testing.T) {
 		DrainTimeout:  100 * time.Millisecond,
 	}
 
-	err = serve.ListenAndServe(context.Background(), srv, cfg)
+	err = serve.ListenAndServe(context.Background(), srv, slog.Default(), cfg)
 	assert.Error(t, err)
 }
 
@@ -73,34 +72,7 @@ func TestListenAndServe_GracefulShutdown(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- serve.ListenAndServe(ctx, srv, cfg)
-	}()
-
-	time.Sleep(50 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-done:
-		require.NoError(t, err)
-	case <-time.After(1 * time.Second):
-		t.Fatal("shutdown timed out")
-	}
-}
-
-func TestListenAndServe_GracefulShutdownWithLogger(t *testing.T) {
-	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
-
-	cfg := serve.Config{
-		ShutdownDelay: 50 * time.Millisecond,
-		DrainTimeout:  100 * time.Millisecond,
-		Logger:        slog.Default(),
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	done := make(chan error, 1)
-	go func() {
-		done <- serve.ListenAndServe(ctx, srv, cfg)
+		done <- serve.ListenAndServe(ctx, srv, slog.Default(), cfg)
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -127,7 +99,7 @@ func TestListenAndServe_SignalShutdown(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- serve.ListenAndServe(ctx, srv, cfg)
+		done <- serve.ListenAndServe(ctx, srv, slog.Default(), cfg)
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -149,6 +121,6 @@ func TestListenAndServeTLS_ServerError(t *testing.T) {
 		DrainTimeout:  100 * time.Millisecond,
 	}
 
-	err := serve.ListenAndServeTLS(context.Background(), srv, "nonexistent.crt", "nonexistent.key", cfg)
+	err := serve.ListenAndServeTLS(context.Background(), srv, slog.Default(), "nonexistent.crt", "nonexistent.key", cfg)
 	assert.Error(t, err)
 }

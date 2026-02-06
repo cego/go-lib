@@ -101,9 +101,8 @@ srv := serve.WithDefaults(&http.Server{Addr: ":8080", Handler: myHandler})
 ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 defer stop()
 
-err := serve.ListenAndServe(ctx, srv, serve.Config{
+err := serve.ListenAndServe(ctx, srv, slog.Default(), serve.Config{
     ShutdownDelay: 10 * time.Second, // Keep listening while LB deregisters
     DrainTimeout:  5 * time.Second,  // Time to drain in-flight requests
-    Logger:        slog.Default(),   // Optional: logs shutdown phases
 })
 ```

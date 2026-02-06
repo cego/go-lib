@@ -37,7 +37,6 @@ func WithDefaults(srv *http.Server) *http.Server {
 type Config struct {
 	ShutdownDelay time.Duration
 	DrainTimeout  time.Duration
-	Logger        *slog.Logger
 }
 
 func (c Config) withDefaults() Config {
@@ -47,23 +46,20 @@ func (c Config) withDefaults() Config {
 	if c.DrainTimeout == 0 {
 		c.DrainTimeout = DefaultDrainTimeout
 	}
-	if c.Logger == nil {
-		c.Logger = slog.Default()
-	}
 	return c
 }
 
-func ListenAndServe(ctx context.Context, srv *http.Server, cfg Config) error {
-	return listenAndShutdown(ctx, srv, srv.ListenAndServe, cfg)
+func ListenAndServe(ctx context.Context, srv *http.Server, logger *slog.Logger, cfg Config) error {
+	return listenAndShutdown(ctx, srv, logger, srv.ListenAndServe, cfg)
 }
 
-func ListenAndServeTLS(ctx context.Context, srv *http.Server, certFile, keyFile string, cfg Config) error {
-	return listenAndShutdown(ctx, srv, func() error {
+func ListenAndServeTLS(ctx context.Context, srv *http.Server, logger *slog.Logger, certFile, keyFile string, cfg Config) error {
+	return listenAndShutdown(ctx, srv, logger, func() error {
 		return srv.ListenAndServeTLS(certFile, keyFile)
 	}, cfg)
 }
 
-func listenAndShutdown(ctx context.Context, srv *http.Server, startFn func() error, cfg Config) error {
+func listenAndShutdown(ctx context.Context, srv *http.Server, logger *slog.Logger, startFn func() error, cfg Config) error {
 	cfg = cfg.withDefaults()
 	serverErrors := make(chan error, 1)
 	go func() {
@@ -74,10 +70,10 @@ func listenAndShutdown(ctx context.Context, srv *http.Server, startFn func() err
 	case err := <-serverErrors:
 		return err
 	case <-ctx.Done():
-		cfg.Logger.Debug("shutdown signal received, waiting for load balancer to deregister", "delay", cfg.ShutdownDelay)
+		logger.Debug("shutdown signal received, waiting for load balancer to deregister", "delay", cfg.ShutdownDelay)
 		time.Sleep(cfg.ShutdownDelay)
 
-		cfg.Logger.Debug("draining existing connections")
+		logger.Debug("draining existing connections")
 		drainCtx, cancel := context.WithTimeout(context.Background(), cfg.DrainTimeout)
 		defer cancel()
 
@@ -85,7 +81,7 @@ func listenAndShutdown(ctx context.Context, srv *http.Server, startFn func() err
 			return fmt.Errorf("shutdown failed: %w", err)
 		}
 
-		cfg.Logger.Debug("server shutdown complete")
+		logger.Debug("server shutdown complete")
 	}
 	return nil
 }
