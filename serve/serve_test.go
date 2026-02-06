@@ -42,14 +42,9 @@ func TestWithDefaults(t *testing.T) {
 func TestListenAndServe_ServerError(t *testing.T) {
 	listener, err := net.Listen("tcp", ":0")
 	require.NoError(t, err)
-	addr := listener.Addr().String()
-	_ = listener.Close()
+	defer func() { _ = listener.Close() }()
 
-	listener2, err := net.Listen("tcp", addr)
-	require.NoError(t, err)
-	defer func() { _ = listener2.Close() }()
-
-	srv := serve.WithDefaults(&http.Server{Addr: addr, Handler: http.NewServeMux()})
+	srv := serve.WithDefaults(&http.Server{Addr: listener.Addr().String(), Handler: http.NewServeMux()})
 	srv.ShutdownDelay = 100 * time.Millisecond
 	srv.DrainTimeout = 100 * time.Millisecond
 
