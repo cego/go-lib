@@ -47,6 +47,9 @@ func (c Config) withDefaults() Config {
 	if c.DrainTimeout == 0 {
 		c.DrainTimeout = DefaultDrainTimeout
 	}
+	if c.Logger == nil {
+		c.Logger = slog.Default()
+	}
 	return c
 }
 
@@ -71,16 +74,10 @@ func listenAndShutdown(ctx context.Context, srv *http.Server, startFn func() err
 	case err := <-serverErrors:
 		return err
 	case <-ctx.Done():
-		if cfg.Logger != nil {
-			cfg.Logger.Debug("shutdown signal received, waiting for load balancer to deregister", "delay", cfg.ShutdownDelay)
-		}
-
+		cfg.Logger.Debug("shutdown signal received, waiting for load balancer to deregister", "delay", cfg.ShutdownDelay)
 		time.Sleep(cfg.ShutdownDelay)
 
-		if cfg.Logger != nil {
-			cfg.Logger.Debug("draining existing connections")
-		}
-
+		cfg.Logger.Debug("draining existing connections")
 		drainCtx, cancel := context.WithTimeout(context.Background(), cfg.DrainTimeout)
 		defer cancel()
 
@@ -88,9 +85,7 @@ func listenAndShutdown(ctx context.Context, srv *http.Server, startFn func() err
 			return fmt.Errorf("shutdown failed: %w", err)
 		}
 
-		if cfg.Logger != nil {
-			cfg.Logger.Debug("server shutdown complete")
-		}
+		cfg.Logger.Debug("server shutdown complete")
 	}
 	return nil
 }
