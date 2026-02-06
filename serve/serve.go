@@ -10,11 +10,6 @@ import (
 )
 
 var (
-	DefaultCurvePreferences = []tls.CurveID{
-		tls.CurveP256,
-		tls.X25519,
-	}
-
 	DefaultMinVersion        uint16 = tls.VersionTLS12
 	DefaultReadTimeout              = 5 * time.Second
 	DefaultWriteTimeout             = 10 * time.Second
@@ -31,9 +26,6 @@ func WithDefaults(srv *http.Server) *http.Server {
 
 	if srv.TLSConfig.MinVersion == 0 {
 		srv.TLSConfig.MinVersion = DefaultMinVersion
-	}
-	if srv.TLSConfig.CurvePreferences == nil {
-		srv.TLSConfig.CurvePreferences = DefaultCurvePreferences
 	}
 
 	if srv.ReadTimeout == 0 {

@@ -27,7 +27,6 @@ func TestWithDefaults(t *testing.T) {
 		assert.Equal(t, serve.DefaultReadHeaderTimeout, result.ReadHeaderTimeout)
 		assert.NotNil(t, result.TLSConfig)
 		assert.Equal(t, serve.DefaultMinVersion, result.TLSConfig.MinVersion)
-		assert.Equal(t, serve.DefaultCurvePreferences, result.TLSConfig.CurvePreferences)
 	})
 
 	t.Run("preserves existing timeouts", func(t *testing.T) {
@@ -43,17 +42,14 @@ func TestWithDefaults(t *testing.T) {
 	})
 
 	t.Run("preserves existing TLSConfig", func(t *testing.T) {
-		customCurves := []tls.CurveID{tls.X25519}
 		srv := &http.Server{
 			TLSConfig: &tls.Config{
-				MinVersion:       tls.VersionTLS13,
-				CurvePreferences: customCurves,
+				MinVersion: tls.VersionTLS13,
 			},
 		}
 		result := serve.WithDefaults(srv)
 
 		assert.Equal(t, uint16(tls.VersionTLS13), result.TLSConfig.MinVersion)
-		assert.Equal(t, customCurves, result.TLSConfig.CurvePreferences)
 	})
 }
 
