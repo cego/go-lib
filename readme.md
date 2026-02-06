@@ -93,7 +93,7 @@ Available constants: `XForwardedProto`, `XForwardedMethod`, `XForwardedHost`, `X
 
 ## Using Serve (Graceful Shutdown)
 
-Drop-in replacement for `http.ListenAndServe` that handles graceful shutdown with a configurable delay for load balancer deregistration.
+Graceful HTTP server shutdown with a configurable delay for load balancer deregistration.
 
 ```go
 srv := serve.WithDefaults(&http.Server{Addr: ":8080", Handler: myHandler})
