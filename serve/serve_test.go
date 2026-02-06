@@ -17,21 +17,21 @@ import (
 
 func TestWithDefaults(t *testing.T) {
 	t.Run("sets defaults on empty server", func(t *testing.T) {
-		srv := &http.Server{}
-		result := serve.WithDefaults(srv)
+		result := serve.WithDefaults(&http.Server{})
 
 		assert.Equal(t, serve.DefaultReadTimeout, result.ReadTimeout)
 		assert.Equal(t, serve.DefaultWriteTimeout, result.WriteTimeout)
 		assert.Equal(t, serve.DefaultIdleTimeout, result.IdleTimeout)
 		assert.Equal(t, serve.DefaultReadHeaderTimeout, result.ReadHeaderTimeout)
+		assert.Equal(t, serve.DefaultShutdownDelay, result.ShutdownDelay)
+		assert.Equal(t, serve.DefaultDrainTimeout, result.DrainTimeout)
 	})
 
 	t.Run("preserves existing timeouts", func(t *testing.T) {
-		srv := &http.Server{
+		result := serve.WithDefaults(&http.Server{
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 60 * time.Second,
-		}
-		result := serve.WithDefaults(srv)
+		})
 
 		assert.Equal(t, 30*time.Second, result.ReadTimeout)
 		assert.Equal(t, 60*time.Second, result.WriteTimeout)
@@ -49,30 +49,24 @@ func TestListenAndServe_ServerError(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = listener2.Close() }()
 
-	srv := &http.Server{Addr: addr, Handler: http.NewServeMux()}
+	srv := serve.WithDefaults(&http.Server{Addr: addr, Handler: http.NewServeMux()})
+	srv.ShutdownDelay = 100 * time.Millisecond
+	srv.DrainTimeout = 100 * time.Millisecond
 
-	cfg := serve.Config{
-		ShutdownDelay: 100 * time.Millisecond,
-		DrainTimeout:  100 * time.Millisecond,
-	}
-
-	err = serve.ListenAndServe(context.Background(), srv, slog.Default(), cfg)
+	err = serve.ListenAndServe(context.Background(), srv, slog.Default())
 	assert.Error(t, err)
 }
 
 func TestListenAndServe_GracefulShutdown(t *testing.T) {
-	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
-
-	cfg := serve.Config{
-		ShutdownDelay: 50 * time.Millisecond,
-		DrainTimeout:  100 * time.Millisecond,
-	}
+	srv := serve.WithDefaults(&http.Server{Addr: ":0", Handler: http.NewServeMux()})
+	srv.ShutdownDelay = 50 * time.Millisecond
+	srv.DrainTimeout = 100 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan error, 1)
 	go func() {
-		done <- serve.ListenAndServe(ctx, srv, slog.Default(), cfg)
+		done <- serve.ListenAndServe(ctx, srv, slog.Default())
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -87,19 +81,16 @@ func TestListenAndServe_GracefulShutdown(t *testing.T) {
 }
 
 func TestListenAndServe_SignalShutdown(t *testing.T) {
-	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
-
-	cfg := serve.Config{
-		ShutdownDelay: 50 * time.Millisecond,
-		DrainTimeout:  100 * time.Millisecond,
-	}
+	srv := serve.WithDefaults(&http.Server{Addr: ":0", Handler: http.NewServeMux()})
+	srv.ShutdownDelay = 50 * time.Millisecond
+	srv.DrainTimeout = 100 * time.Millisecond
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM)
 	defer stop()
 
 	done := make(chan error, 1)
 	go func() {
-		done <- serve.ListenAndServe(ctx, srv, slog.Default(), cfg)
+		done <- serve.ListenAndServe(ctx, srv, slog.Default())
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -114,13 +105,10 @@ func TestListenAndServe_SignalShutdown(t *testing.T) {
 }
 
 func TestListenAndServeTLS_ServerError(t *testing.T) {
-	srv := &http.Server{Addr: ":0", Handler: http.NewServeMux()}
+	srv := serve.WithDefaults(&http.Server{Addr: ":0", Handler: http.NewServeMux()})
+	srv.ShutdownDelay = 100 * time.Millisecond
+	srv.DrainTimeout = 100 * time.Millisecond
 
-	cfg := serve.Config{
-		ShutdownDelay: 100 * time.Millisecond,
-		DrainTimeout:  100 * time.Millisecond,
-	}
-
-	err := serve.ListenAndServeTLS(context.Background(), srv, slog.Default(), "nonexistent.crt", "nonexistent.key", cfg)
+	err := serve.ListenAndServeTLS(context.Background(), srv, slog.Default(), "nonexistent.crt", "nonexistent.key")
 	assert.Error(t, err)
 }
