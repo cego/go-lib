@@ -39,16 +39,6 @@ type Config struct {
 	DrainTimeout  time.Duration
 }
 
-func (c Config) withDefaults() Config {
-	if c.ShutdownDelay == 0 {
-		c.ShutdownDelay = DefaultShutdownDelay
-	}
-	if c.DrainTimeout == 0 {
-		c.DrainTimeout = DefaultDrainTimeout
-	}
-	return c
-}
-
 func ListenAndServe(ctx context.Context, srv *http.Server, logger *slog.Logger, cfg Config) error {
 	return listenAndShutdown(ctx, srv, logger, srv.ListenAndServe, cfg)
 }
@@ -60,7 +50,12 @@ func ListenAndServeTLS(ctx context.Context, srv *http.Server, logger *slog.Logge
 }
 
 func listenAndShutdown(ctx context.Context, srv *http.Server, logger *slog.Logger, startFn func() error, cfg Config) error {
-	cfg = cfg.withDefaults()
+	if cfg.ShutdownDelay == 0 {
+		cfg.ShutdownDelay = DefaultShutdownDelay
+	}
+	if cfg.DrainTimeout == 0 {
+		cfg.DrainTimeout = DefaultDrainTimeout
+	}
 	serverErrors := make(chan error, 1)
 	go func() {
 		serverErrors <- startFn()
