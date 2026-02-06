@@ -64,7 +64,7 @@ func listenAndShutdown(ctx context.Context, srv *Server, logger *slog.Logger, st
 	case err := <-serverErrors:
 		return err
 	case <-ctx.Done():
-		logger.Debug("shutdown signal received, waiting for load balancer to deregister", "delay", srv.ShutdownDelay)
+		logger.Debug(fmt.Sprintf("shutdown signal received, waiting %s for load balancer to deregister", srv.ShutdownDelay))
 		time.Sleep(srv.ShutdownDelay)
 
 		logger.Debug("draining existing connections")
