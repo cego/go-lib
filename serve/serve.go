@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var (
+const (
 	DefaultReadTimeout       = 5 * time.Second
 	DefaultWriteTimeout      = 10 * time.Second
 	DefaultIdleTimeout       = 120 * time.Second
