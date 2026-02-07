@@ -100,7 +100,7 @@ Context-aware periodic task execution with jitter support.
 ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 defer stop()
 
-go periodic.Run(ctx, 2*time.Second, time.Duration(rand.Intn(1000))*time.Millisecond, func() {
+periodic.Run(ctx, 2*time.Second, time.Duration(rand.Intn(1000))*time.Millisecond, func() {
     fmt.Println("runs every 2 seconds until ctx is cancelled")
 })
 ```
