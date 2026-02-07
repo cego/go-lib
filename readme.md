@@ -19,6 +19,7 @@ import (
     "github.com/cego/go-lib/v2/forwardauth"
     "github.com/cego/go-lib/v2/headers"
     "github.com/cego/go-lib/v2/serve"
+    "github.com/cego/go-lib/v2/periodic"
 )
 ```
 
@@ -90,6 +91,19 @@ req.Header.Get(headers.XForwardedFor)
 ```
 
 Available constants: `XForwardedProto`, `XForwardedMethod`, `XForwardedHost`, `XForwardedUri`, `XForwardedFor`, `Accept`, `UserAgent`, `Cookie`, `Authorization`, `RemoteUser`, `ContentType`
+
+## Using Periodic
+
+Context-aware periodic task execution with jitter support.
+
+```go
+ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+defer stop()
+
+go periodic.Run(ctx, 2*time.Second, time.Duration(rand.Intn(1000))*time.Millisecond, func() {
+    fmt.Println("runs every 2 seconds until ctx is cancelled")
+})
+```
 
 ## Using Serve (Graceful Shutdown)
 
