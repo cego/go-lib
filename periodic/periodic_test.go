@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRun_ExecutesImmediately(t *testing.T) {
+func TestRunExecutesImmediately(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -23,7 +23,7 @@ func TestRun_ExecutesImmediately(t *testing.T) {
 	assert.Equal(t, int32(1), count.Load())
 }
 
-func TestRun_ExecutesPeriodically(t *testing.T) {
+func TestRunExecutesPeriodically(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -36,7 +36,7 @@ func TestRun_ExecutesPeriodically(t *testing.T) {
 	assert.GreaterOrEqual(t, count.Load(), int32(3))
 }
 
-func TestRun_StopsOnContextCancel(t *testing.T) {
+func TestRunStopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var count atomic.Int32
@@ -52,7 +52,7 @@ func TestRun_StopsOnContextCancel(t *testing.T) {
 	assert.Equal(t, countAtCancel, count.Load())
 }
 
-func TestRun_AppliesJitter(t *testing.T) {
+func TestRunAppliesJitter(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -68,13 +68,13 @@ func TestRun_AppliesJitter(t *testing.T) {
 	assert.Equal(t, int32(1), count.Load())
 }
 
-func TestRun_DoesNotBlock(t *testing.T) {
+func TestRunDoesNotBlock(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	returned := make(chan struct{})
 	go func() {
-		periodic.Run(ctx, time.Hour, time.Hour, func() {})
+		periodic.Run(ctx, time.Hour, time.Hour, func() { /* no-op: testing that Run returns immediately */ })
 		close(returned)
 	}()
 

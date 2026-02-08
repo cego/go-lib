@@ -41,6 +41,10 @@ l := logger.NewWithLevel(slog.LevelInfo)
 
 // Set as global slog default
 slog.SetDefault(l)
+
+// Testing with mock logger
+l := logger.NewMock()
+r := renderer.New(l)
 ```
 
 ## Using Renderer with builtin logging
@@ -76,12 +80,6 @@ mux.Handle("/data", fa.Handler(reverseProxy))
 mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWriter, req *http.Request) {
 	_,_ = w.Write()
 }))
-```
-
-## Testing with Mock Logger
-```go
-l := logger.NewMock()
-r := renderer.New(l)
 ```
 
 ## Headers
