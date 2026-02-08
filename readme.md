@@ -19,6 +19,7 @@ import (
     "github.com/cego/go-lib/v2/forwardauth"
     "github.com/cego/go-lib/v2/headers"
     "github.com/cego/go-lib/v2/serve"
+    "github.com/cego/go-lib/v2/periodic"
 )
 ```
 
@@ -40,6 +41,10 @@ l := logger.NewWithLevel(slog.LevelInfo)
 
 // Set as global slog default
 slog.SetDefault(l)
+
+// Testing with mock logger
+l := logger.NewMock()
+r := renderer.New(l)
 ```
 
 ## Using Renderer with builtin logging
@@ -77,12 +82,6 @@ mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWriter, req *http.Reques
 }))
 ```
 
-## Testing with Mock Logger
-```go
-l := logger.NewMock()
-r := renderer.New(l)
-```
-
 ## Headers
 ```go
 req.Header.Get(headers.Authorization)
@@ -90,6 +89,19 @@ req.Header.Get(headers.XForwardedFor)
 ```
 
 Available constants: `XForwardedProto`, `XForwardedMethod`, `XForwardedHost`, `XForwardedUri`, `XForwardedFor`, `Accept`, `UserAgent`, `Cookie`, `Authorization`, `RemoteUser`, `ContentType`
+
+## Using Periodic
+
+Context-aware periodic task execution with jitter support.
+
+```go
+ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+defer stop()
+
+periodic.Run(ctx, 2*time.Second, time.Duration(rand.Intn(1000))*time.Millisecond, func() {
+    fmt.Println("runs every 2 seconds until ctx is cancelled")
+})
+```
 
 ## Using Serve (Graceful Shutdown)
 
