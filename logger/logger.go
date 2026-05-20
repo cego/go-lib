@@ -2,15 +2,57 @@ package logger
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/cego/go-lib/v2/headers"
 )
+
+// defaultAsyncCapacity is the buffer depth of the shared stdout
+// AsyncWriter. Picked so a short stdout stall (a few hundred ms at
+// typical service log rates) doesn't drop lines, while a sustained
+// stall doesn't grow memory without bound.
+const defaultAsyncCapacity = 4096
+
+var (
+	stdoutAsyncOnce sync.Once
+	stdoutAsync     *AsyncWriter
+)
+
+// stdoutWriter returns the process-wide AsyncWriter wrapping os.Stdout,
+// lazily initialised. All loggers built by this package share it so
+// they share one drain goroutine and one buffer.
+func stdoutWriter() *AsyncWriter {
+	stdoutAsyncOnce.Do(func() {
+		stdoutAsync = NewAsyncWriter(os.Stdout, defaultAsyncCapacity)
+	})
+	return stdoutAsync
+}
+
+// Flush blocks until all log lines queued so far have been written to
+// stdout. Call it from your graceful shutdown path so the final lines
+// reach the log collector before the process exits.
+func Flush() {
+	if w := stdoutAsync; w != nil {
+		w.Flush()
+	}
+}
+
+// Dropped returns the number of log lines dropped because the async
+// buffer was saturated. A non-zero value means stdout's consumer is
+// not keeping up.
+func Dropped() uint64 {
+	if w := stdoutAsync; w != nil {
+		return w.Dropped()
+	}
+	return 0
+}
 
 type Logger interface {
 	Debug(message string, args ...any)
@@ -19,14 +61,14 @@ type Logger interface {
 }
 
 func New() *slog.Logger {
-	return newSlogger(slog.LevelDebug)
+	return newSlogger(stdoutWriter(), slog.LevelDebug)
 }
 
 func NewWithLevel(level slog.Level) *slog.Logger {
-	return newSlogger(level)
+	return newSlogger(stdoutWriter(), level)
 }
 
-func newSlogger(level slog.Level) *slog.Logger {
+func newSlogger(w io.Writer, level slog.Level) *slog.Logger {
 	opts := &slog.HandlerOptions{
 		Level: level,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
@@ -43,7 +85,7 @@ func newSlogger(level slog.Level) *slog.Logger {
 			return a
 		},
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
+	return slog.New(slog.NewJSONHandler(w, opts))
 }
 
 func GetSlogAttrFromError(err error) slog.Attr {

@@ -24,6 +24,13 @@ import (
 ```
 
 ## Using Logger
+
+Writes go through a shared background goroutine so request handlers
+don't stall when stdout's consumer (filebeat, the container runtime,
+`kubectl logs`) falls behind. Call `logger.Flush()` from your graceful
+shutdown path; `logger.Dropped()` reports lines dropped because the
+buffer was saturated.
+
 ```go
 l := logger.New()
 
@@ -41,6 +48,9 @@ l := logger.NewWithLevel(slog.LevelInfo)
 
 // Set as global slog default
 slog.SetDefault(l)
+
+// Drain queued lines before exit
+defer logger.Flush()
 
 // Testing with mock logger
 l := logger.NewMock()

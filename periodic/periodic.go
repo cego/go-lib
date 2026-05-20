@@ -28,6 +28,12 @@ func Run(ctx context.Context, interval time.Duration, jitter time.Duration, fn f
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				// select picks non-deterministically when both
+				// channels are ready, so re-check cancellation
+				// before firing.
+				if ctx.Err() != nil {
+					return
+				}
 				fn()
 			}
 		}
