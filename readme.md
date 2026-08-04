@@ -17,6 +17,7 @@ import (
     "github.com/cego/go-lib/v2/logger"
     "github.com/cego/go-lib/v2/renderer"
     "github.com/cego/go-lib/v2/forwardauth"
+    "github.com/cego/go-lib/v2/oidcauth"
     "github.com/cego/go-lib/v2/headers"
     "github.com/cego/go-lib/v2/serve"
     "github.com/cego/go-lib/v2/periodic"
@@ -80,6 +81,53 @@ mux.Handle("/data", fa.Handler(reverseProxy))
 mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWriter, req *http.Request) {
 	_,_ = w.Write()
 }))
+```
+
+## Using OidcAuth
+
+Authorization code flow with PKCE for browsers, bearer tokens for api clients. The verified id token
+is the session cookie, so there is no session store.
+
+```go
+mux := http.NewServeMux()
+auth, err := oidcauth.New(context.Background(), l, oidcauth.Config{
+	Issuer:       "https://keycloak.example.com/realms/cego",
+	ClientID:     "myservice",
+	ClientSecret: os.Getenv("MYSERVICE_OIDC_CLIENT_SECRET"),
+	BaseURL:      "https://myservice.example.com",
+})
+
+auth.Register(mux) // Adds GET /auth/login, GET /auth/callback and POST /auth/logout
+
+mux.Handle("GET /{$}", auth.HandlerFunc(index))                             // Authenticated
+mux.Handle("GET /things", auth.HandlerFunc(things, "reader", "tool-admin")) // Either role
+mux.Handle("POST /things/{id}/delete", auth.HandlerFunc(del, "tool-admin")) // That role
+
+r.Use(auth.Middleware("reader")) // The same gate as chi middleware
+
+// Inside a wrapped handler, or a template
+user := oidcauth.UserFromContext(r.Context())
+user.HasRole("tool-admin")
+user.HasAnyRole("reader", "tool-admin")
+```
+
+- Register `<BaseURL>/auth/callback` on the client, or the provider rejects the login
+- Roles are read from `client_roles` and `resource_access.<client>.roles`
+- Issuer and base url must be https, except on loopback
+- No session: browsers go to the provider, htmx gets `HX-Redirect`, api clients get `401`
+- Logout is a `POST`, and hands the provider no token, so it asks the user to confirm
+- Sessions cannot be revoked before the id token expires, so keep that lifetime short
+- Cookies are `__Host-` prefixed, secure and `SameSite=Lax`, which is not a CSRF token
+
+### Options
+```go
+auth, err := oidcauth.New(ctx, l, cfg,
+	oidcauth.WithHTTPClient(httpClient),          // default timeout 10s
+	oidcauth.WithScopes("openid", "email"),       // default openid, profile, email
+	oidcauth.WithRolesClaim("realm_roles"),       // default client_roles
+	oidcauth.WithCookiePrefix("myservice"),       // default oidcauth
+	oidcauth.WithBearerAudience("myservice-api"), // default the client id
+)
 ```
 
 ## Headers
