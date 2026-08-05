@@ -118,6 +118,7 @@ user.HasAnyRole("reader", "tool-admin")
 - Logout is a `POST`, and hands the provider no token, so it asks the user to confirm
 - Sessions cannot be revoked before the id token expires, so keep that lifetime short
 - Cookies are `__Host-` prefixed, secure and `SameSite=Lax`, which is not a CSRF token
+- `User` implements `slog.LogValuer`, so `"user", user` logs the ecs shaped group
 
 ### Options
 ```go

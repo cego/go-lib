@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"slices"
@@ -51,6 +52,21 @@ type User struct {
 	FamilyName        string
 	PreferredUsername string
 	Roles             []string
+}
+
+func (u User) LogValue() slog.Value {
+	id := u.PreferredUsername
+	if id == "" {
+		id = u.Subject
+	}
+
+	return slog.GroupValue(
+		slog.String("id", id),
+		slog.String("type", "oidc"),
+		slog.String("email", u.Email),
+		slog.String("full_name", u.Name),
+		slog.Any("roles", u.Roles),
+	)
 }
 
 func (u User) HasRole(role string) bool {
@@ -207,7 +223,7 @@ func (o *OidcAuth) Handler(handler http.Handler, roles ...string) http.Handler {
 		}
 
 		if !user.HasAnyRole(roles...) {
-			o.logger.Info("denied request without required role", "user", user.Email, "required", roles, "roles", user.Roles, "path", r.URL.Path)
+			o.logger.Info("denied request without required role", "user", user, slog.Group("url", slog.String("path", r.URL.Path)), "required_roles", roles)
 			o.renderer.Text(w, http.StatusForbidden, "you do not hold any of the roles "+strings.Join(roles, ", "))
 			return
 		}
@@ -245,13 +261,13 @@ func (o *OidcAuth) Login(w http.ResponseWriter, r *http.Request) {
 	state, err := randomString()
 	if err != nil {
 		o.renderer.Text(w, http.StatusInternalServerError, "could not start login")
-		o.logger.Error("failed to generate state", "error", err)
+		o.logger.Error("failed to generate state", logger.GetSlogAttrFromError(err))
 		return
 	}
 	nonce, err := randomString()
 	if err != nil {
 		o.renderer.Text(w, http.StatusInternalServerError, "could not start login")
-		o.logger.Error("failed to generate nonce", "error", err)
+		o.logger.Error("failed to generate nonce", logger.GetSlogAttrFromError(err))
 		return
 	}
 
@@ -280,7 +296,7 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 	token, err := o.oauth.Exchange(coreoidc.ClientContext(r.Context(), o.httpClient), r.URL.Query().Get("code"), oauth2.VerifierOption(verifier.Value))
 	if err != nil {
 		o.renderer.Text(w, http.StatusUnauthorized, loginFailedMessage)
-		o.logger.Error("failed to exchange authorization code", "error", err)
+		o.logger.Error("failed to exchange authorization code", logger.GetSlogAttrFromError(err))
 		return
 	}
 
@@ -294,7 +310,7 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 	idToken, err := o.verifier.Verify(coreoidc.ClientContext(r.Context(), o.httpClient), rawIDToken)
 	if err != nil {
 		o.renderer.Text(w, http.StatusUnauthorized, loginFailedMessage)
-		o.logger.Error("failed to verify id token", "error", err)
+		o.logger.Error("failed to verify id token", logger.GetSlogAttrFromError(err))
 		return
 	}
 
@@ -307,7 +323,7 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 	user, err := o.claimsToUser(idToken, true)
 	if err != nil {
 		o.renderer.Text(w, http.StatusUnauthorized, loginFailedMessage)
-		o.logger.Error("failed to read id token claims", "error", err)
+		o.logger.Error("failed to read id token claims", logger.GetSlogAttrFromError(err))
 		return
 	}
 
@@ -328,7 +344,7 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	o.clearCookie(w, returnCookie)
 
-	o.logger.Info("logged in", "user", user.Email, "roles", user.Roles)
+	o.logger.Info("logged in", "user", user)
 	http.Redirect(w, r, target, http.StatusFound)
 }
 

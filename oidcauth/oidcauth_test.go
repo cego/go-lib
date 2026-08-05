@@ -2,10 +2,13 @@ package oidcauth_test
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/cego/go-lib/v2/logger"
@@ -563,6 +566,36 @@ func TestOidcAuth(t *testing.T) {
 		body := make([]byte, 128)
 		n, _ := response.Body.Read(body)
 		assert.Equal(t, "Mads Nielsen mjn", string(body[:n]))
+	})
+
+	t.Run("the user logs as an ecs shaped group", func(t *testing.T) {
+		user := oidcauth.User{
+			Subject: "cb18311d", PreferredUsername: "mjn", Email: "mjn@cego.dk",
+			Name: "Mads Jon Nielsen", Roles: []string{"reader", "process-admin"},
+		}
+
+		var out strings.Builder
+		slog.New(slog.NewJSONHandler(&out, nil)).Info("logged in", "user", user)
+
+		logged := map[string]any{}
+		require.NoError(t, json.Unmarshal([]byte(out.String()), &logged))
+		fields, ok := logged["user"].(map[string]any)
+		require.True(t, ok, out.String())
+
+		assert.Equal(t, "mjn", fields["id"])
+		assert.Equal(t, "oidc", fields["type"])
+		assert.Equal(t, "mjn@cego.dk", fields["email"])
+		assert.Equal(t, "Mads Jon Nielsen", fields["full_name"])
+		assert.Equal(t, []any{"reader", "process-admin"}, fields["roles"])
+	})
+
+	t.Run("the log id falls back to the subject", func(t *testing.T) {
+		var out strings.Builder
+		slog.New(slog.NewJSONHandler(&out, nil)).Info("logged in", "user", oidcauth.User{Subject: "cb18311d"})
+
+		logged := map[string]any{}
+		require.NoError(t, json.Unmarshal([]byte(out.String()), &logged))
+		assert.Equal(t, "cb18311d", logged["user"].(map[string]any)["id"])
 	})
 
 	t.Run("discovery failure is reported", func(t *testing.T) {
