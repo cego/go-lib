@@ -18,6 +18,7 @@ import (
     "github.com/cego/go-lib/v2/renderer"
     "github.com/cego/go-lib/v2/forwardauth"
     "github.com/cego/go-lib/v2/oidcauth"
+    "github.com/cego/go-lib/v2/oidcclient"
     "github.com/cego/go-lib/v2/headers"
     "github.com/cego/go-lib/v2/serve"
     "github.com/cego/go-lib/v2/periodic"
@@ -128,6 +129,44 @@ auth, err := oidcauth.New(ctx, l, cfg,
 	oidcauth.WithRolesClaim("realm_roles"),       // default client_roles
 	oidcauth.WithCookiePrefix("myservice"),       // default oidcauth
 	oidcauth.WithBearerAudience("myservice-api"), // default the client id
+)
+```
+
+## Using OidcClient
+
+The outbound counterpart to OidcAuth: the client credentials grant, for calling
+another service that verifies bearer tokens.
+
+```go
+tokens, err := oidcclient.New(oidcclient.Config{
+	Issuer:       "https://keycloak.example.com/realms/cego",
+	ClientID:     "myservice",
+	ClientSecret: os.Getenv("MYSERVICE_OIDC_CLIENT_SECRET"),
+})
+
+// Set the header yourself
+token, err := tokens.Token(ctx)
+req.Header.Set(headers.Authorization, "Bearer "+token)
+
+// Or let an http client do it on every request
+client := tokens.HTTPClient(&http.Client{Timeout: 30 * time.Second})
+res, err := client.Do(req)
+```
+
+- The issuer is not contacted until the first `Token` call, so a provider that is
+  briefly unreachable does not stop the service from starting
+- Tokens are cached and replaced `DefaultRefreshBefore` ahead of their expiry, so
+  a token handed to a caller does not expire in flight
+- Concurrent callers share one request to the issuer
+- The roles and audiences in the token come from the provider's configuration of
+  the client, not from this package
+
+### Options
+```go
+tokens, err := oidcclient.New(cfg,
+	oidcclient.WithHTTPClient(httpClient),           // default timeout 10s
+	oidcclient.WithScopes("profile", "email"),       // default the provider's own
+	oidcclient.WithRefreshBefore(10*time.Second),    // default 30s
 )
 ```
 
