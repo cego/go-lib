@@ -158,6 +158,7 @@ res, err := client.Do(req)
 - Tokens are cached and replaced `DefaultRefreshBefore` ahead of their expiry, so
   a token handed to a caller does not expire in flight
 - Concurrent callers share one request to the issuer
+- HTTP clients reject cross-origin redirects rather than forwarding the bearer token
 - The roles and audiences in the token come from the provider's configuration of
   the client, not from this package
 

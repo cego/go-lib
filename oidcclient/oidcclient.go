@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,8 +59,8 @@ func WithRefreshBefore(refreshBefore time.Duration) OptionFunc {
 }
 
 // TokenSource hands out access tokens for one client, caching each until it is
-// close to expiry. It is safe for concurrent use, and only one caller at a time
-// talks to the issuer.
+// close to expiry. It is safe for concurrent use, and concurrent callers share
+// an in-flight request to the issuer.
 type TokenSource struct {
 	issuer        string
 	httpClient    *http.Client
@@ -69,6 +70,14 @@ type TokenSource struct {
 	mu       sync.Mutex
 	tokenURL string
 	token    *oauth2.Token
+	inFlight *tokenFetch
+}
+
+type tokenFetch struct {
+	done          chan struct{}
+	token         string
+	err           error
+	ownerCanceled bool
 }
 
 // New validates the configuration. The issuer is not contacted until the first
@@ -104,37 +113,105 @@ func New(cfg Config, opts ...OptionFunc) (*TokenSource, error) {
 // Token returns an access token for the client, reusing the cached one until it
 // is within the refresh window of expiring.
 func (t *TokenSource) Token(ctx context.Context) (string, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	if t.fresh() {
-		return t.token.AccessToken, nil
+	if err := ctx.Err(); err != nil {
+		return "", err
 	}
 
-	if t.tokenURL == "" {
-		tokenURL, err := t.discoverTokenURL(ctx)
-		if err != nil {
+	for {
+		if err := ctx.Err(); err != nil {
 			return "", err
 		}
-		t.tokenURL = tokenURL
+
+		t.mu.Lock()
+		if t.fresh() {
+			token := t.token.AccessToken
+			t.mu.Unlock()
+
+			return token, nil
+		}
+
+		if inFlight := t.inFlight; inFlight != nil {
+			t.mu.Unlock()
+
+			select {
+			case <-inFlight.done:
+				if err := ctx.Err(); err != nil {
+					return "", err
+				}
+				if inFlight.ownerCanceled {
+					continue
+				}
+
+				return inFlight.token, inFlight.err
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		}
+
+		inFlight := &tokenFetch{done: make(chan struct{})}
+		t.inFlight = inFlight
+		tokenURL := t.tokenURL
+		if tokenURL != "" {
+			t.config.TokenURL = tokenURL
+		}
+		t.mu.Unlock()
+
+		token, tokenURL, err := t.fetchToken(ctx, tokenURL)
+		inFlight.token, inFlight.err = "", err
+		if token != nil {
+			inFlight.token = token.AccessToken
+		}
+		inFlight.ownerCanceled = contextCancellation(ctx, err)
+
+		t.mu.Lock()
+		if tokenURL != "" {
+			t.tokenURL = tokenURL
+			t.config.TokenURL = tokenURL
+		}
+		if err == nil {
+			t.token = token
+		}
+		t.inFlight = nil
+		close(inFlight.done)
+		t.mu.Unlock()
+
+		return inFlight.token, inFlight.err
 	}
-	t.config.TokenURL = t.tokenURL
+}
+
+func (t *TokenSource) fetchToken(ctx context.Context, tokenURL string) (*oauth2.Token, string, error) {
+	if tokenURL == "" {
+		var err error
+		tokenURL, err = t.discoverTokenURL(ctx)
+		if err != nil {
+			return nil, "", err
+		}
+
+		t.mu.Lock()
+		t.config.TokenURL = tokenURL
+		t.mu.Unlock()
+	}
 
 	token, err := t.config.Token(coreoidc.ClientContext(ctx, t.httpClient))
 	if err != nil {
-		return "", fmt.Errorf("requesting access token for client %s: %w", t.config.ClientID, err)
+		return nil, tokenURL, fmt.Errorf("requesting access token for client %s: %w", t.config.ClientID, err)
 	}
 	if token.AccessToken == "" {
-		return "", fmt.Errorf("issuer %s returned an empty access token", t.issuer)
+		return nil, tokenURL, fmt.Errorf("issuer %s returned an empty access token", t.issuer)
 	}
-	t.token = token
 
-	return token.AccessToken, nil
+	return token, tokenURL, nil
+}
+
+func contextCancellation(ctx context.Context, err error) bool {
+	ctxErr := ctx.Err()
+
+	return ctxErr != nil && errors.Is(err, ctxErr)
 }
 
 // HTTPClient returns a client that sets the bearer token on every request it
 // sends. Its transport reads the token per request, so it keeps working across
-// refreshes.
+// refreshes. Cross-origin redirects are rejected to avoid forwarding the token.
 func (t *TokenSource) HTTPClient(base *http.Client) *http.Client {
 	client := &http.Client{}
 	if base != nil {
@@ -176,6 +253,12 @@ type bearerTransport struct {
 }
 
 func (b *bearerTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.Response != nil {
+		if request.Response.Request == nil || !sameOrigin(request.Response.Request.URL, request.URL) {
+			return nil, errors.New("refusing to send bearer token on a cross-origin redirect")
+		}
+	}
+
 	token, err := b.tokenSource.Token(request.Context())
 	if err != nil {
 		return nil, err
@@ -202,7 +285,11 @@ func requireSecureURL(name, rawURL string) error {
 	if err != nil {
 		return fmt.Errorf("parsing %s %s: %w", name, rawURL, err)
 	}
-	if parsed.Scheme != "https" && !isLoopback(parsed.Hostname()) {
+	if !parsed.IsAbs() || parsed.Host == "" || parsed.Hostname() == "" {
+		return fmt.Errorf("%s %s must be an absolute URL with a host", name, rawURL)
+	}
+	if !strings.EqualFold(parsed.Scheme, "https") &&
+		(!strings.EqualFold(parsed.Scheme, "http") || !isLoopback(parsed.Hostname())) {
 		return fmt.Errorf("%s %s must use https", name, rawURL)
 	}
 
@@ -210,5 +297,30 @@ func requireSecureURL(name, rawURL string) error {
 }
 
 func isLoopback(host string) bool {
-	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+	return strings.EqualFold(host, "localhost") || host == "127.0.0.1" || host == "::1"
+}
+
+func sameOrigin(first, second *url.URL) bool {
+	if first == nil || second == nil {
+		return false
+	}
+
+	return strings.EqualFold(first.Scheme, second.Scheme) &&
+		strings.EqualFold(first.Hostname(), second.Hostname()) &&
+		effectivePort(first) == effectivePort(second)
+}
+
+func effectivePort(parsed *url.URL) string {
+	if port := parsed.Port(); port != "" {
+		return port
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
+	case "http":
+		return "80"
+	case "https":
+		return "443"
+	default:
+		return ""
+	}
 }
