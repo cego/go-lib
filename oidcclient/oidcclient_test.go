@@ -30,6 +30,42 @@ type fakeIssuer struct {
 	accessToken  string
 	tokenStatus  int
 	lastFormData map[string][]string
+	tokenStarted chan<- struct{}
+	tokenRelease <-chan struct{}
+}
+
+type notifyingContext struct {
+	done   <-chan struct{}
+	err    func() error
+	called chan<- struct{}
+	once   sync.Once
+}
+
+type tokenResult struct {
+	token string
+	err   error
+}
+
+func newNotifyingContext(ctx context.Context, called chan<- struct{}) *notifyingContext {
+	return &notifyingContext{done: ctx.Done(), err: ctx.Err, called: called}
+}
+
+func (c *notifyingContext) Deadline() (time.Time, bool) {
+	return time.Time{}, false
+}
+
+func (c *notifyingContext) Done() <-chan struct{} {
+	c.once.Do(func() { c.called <- struct{}{} })
+
+	return c.done
+}
+
+func (c *notifyingContext) Err() error {
+	return c.err()
+}
+
+func (c *notifyingContext) Value(any) any {
+	return nil
 }
 
 func newFakeIssuer(t *testing.T) *fakeIssuer {
@@ -60,7 +96,16 @@ func newFakeIssuer(t *testing.T) *fakeIssuer {
 		status := issuer.tokenStatus
 		expiresIn := issuer.expiresIn
 		issuer.lastFormData = r.Form
+		tokenStarted := issuer.tokenStarted
+		tokenRelease := issuer.tokenRelease
 		issuer.mu.Unlock()
+		if tokenStarted != nil {
+			select {
+			case tokenStarted <- struct{}{}:
+			default:
+			}
+			<-tokenRelease
+		}
 
 		if status != http.StatusOK {
 			w.WriteHeader(status)
@@ -111,6 +156,18 @@ func (f *fakeIssuer) setTokenStatus(status int) {
 	f.tokenStatus = status
 }
 
+func (f *fakeIssuer) blockTokenRequests() (<-chan struct{}, func()) {
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+
+	f.mu.Lock()
+	f.tokenStarted = started
+	f.tokenRelease = release
+	f.mu.Unlock()
+
+	return started, func() { close(release) }
+}
+
 func newTestTokenSource(t *testing.T, issuer *fakeIssuer, opts ...oidcclient.OptionFunc) *oidcclient.TokenSource {
 	t.Helper()
 
@@ -159,6 +216,42 @@ func TestNewRejectsIncompleteConfig(t *testing.T) {
 			require.Error(t, err)
 			assert.Nil(t, tokenSource)
 			assert.ErrorContains(t, err, tt.errors)
+		})
+	}
+}
+
+func TestNewRejectsInvalidIssuer(t *testing.T) {
+	tests := map[string]string{
+		"https:///issuer": "must be an absolute URL with a host",
+		"https://[::1":    "parsing issuer",
+		"ftp://127.0.0.1": "must use https",
+	}
+
+	for issuer, expectedError := range tests {
+		t.Run(issuer, func(t *testing.T) {
+			tokenSource, err := oidcclient.New(oidcclient.Config{
+				Issuer:       issuer,
+				ClientID:     testClientID,
+				ClientSecret: testClientSecret,
+			})
+
+			require.ErrorContains(t, err, expectedError)
+			assert.Nil(t, tokenSource)
+		})
+	}
+}
+
+func TestNewAcceptsLoopbackHTTP(t *testing.T) {
+	for _, issuer := range []string{"http://localhost", "http://127.0.0.1", "http://[::1]"} {
+		t.Run(issuer, func(t *testing.T) {
+			tokenSource, err := oidcclient.New(oidcclient.Config{
+				Issuer:       issuer,
+				ClientID:     testClientID,
+				ClientSecret: testClientSecret,
+			})
+
+			require.NoError(t, err)
+			assert.NotNil(t, tokenSource)
 		})
 	}
 }
@@ -246,6 +339,111 @@ func TestTokenFetchesOnceForConcurrentCallers(t *testing.T) {
 	}
 }
 
+func TestTokenSharesAnIssuerFailureForConcurrentCallers(t *testing.T) {
+	issuer := newFakeIssuer(t)
+	issuer.setTokenStatus(http.StatusInternalServerError)
+	started, release := issuer.blockTokenRequests()
+	tokenSource := newTestTokenSource(t, issuer)
+
+	ownerResult := make(chan tokenResult, 1)
+	go func() {
+		token, err := tokenSource.Token(context.Background())
+		ownerResult <- tokenResult{token: token, err: err}
+	}()
+	<-started
+
+	const waiterCount = 7
+	results := make(chan tokenResult, waiterCount)
+	ready := make(chan struct{}, waiterCount)
+	for range waiterCount {
+		ctx := newNotifyingContext(context.Background(), ready)
+		go func() {
+			token, err := tokenSource.Token(ctx)
+			results <- tokenResult{token: token, err: err}
+		}()
+	}
+	for range waiterCount {
+		<-ready
+	}
+	release()
+
+	owner := <-ownerResult
+	require.Error(t, owner.err)
+	assert.Empty(t, owner.token)
+	for range waiterCount {
+		waiter := <-results
+		assert.Empty(t, waiter.token)
+		assert.Same(t, owner.err, waiter.err)
+	}
+	// clientcredentials probes both auth styles on the first issuer failure.
+	assert.Equal(t, 2, issuer.calls())
+}
+
+func TestTokenWaiterCanCancelWhileFetchIsInProgress(t *testing.T) {
+	issuer := newFakeIssuer(t)
+	started, release := issuer.blockTokenRequests()
+	tokenSource := newTestTokenSource(t, issuer)
+
+	ownerResult := make(chan error, 1)
+	go func() {
+		_, err := tokenSource.Token(context.Background())
+		ownerResult <- err
+	}()
+	<-started
+
+	ctx, cancel := context.WithCancel(context.Background())
+	waiterStarted := make(chan struct{}, 1)
+	notifyingCtx := newNotifyingContext(ctx, waiterStarted)
+	waiterResult := make(chan error, 1)
+	go func() {
+		_, err := tokenSource.Token(notifyingCtx)
+		waiterResult <- err
+	}()
+	<-waiterStarted
+	cancel()
+
+	select {
+	case err := <-waiterResult:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("canceled waiter did not return")
+	}
+
+	release()
+	require.NoError(t, <-ownerResult)
+}
+
+func TestCanceledOwnerDoesNotPoisonLiveWaiter(t *testing.T) {
+	issuer := newFakeIssuer(t)
+	started, release := issuer.blockTokenRequests()
+	tokenSource := newTestTokenSource(t, issuer)
+
+	ownerCtx, cancelOwner := context.WithCancel(context.Background())
+	ownerResult := make(chan error, 1)
+	go func() {
+		_, err := tokenSource.Token(ownerCtx)
+		ownerResult <- err
+	}()
+	<-started
+
+	waiterStarted := make(chan struct{}, 1)
+	waiterCtx := newNotifyingContext(context.Background(), waiterStarted)
+	waiterResult := make(chan tokenResult, 1)
+	go func() {
+		token, err := tokenSource.Token(waiterCtx)
+		waiterResult <- tokenResult{token: token, err: err}
+	}()
+	<-waiterStarted
+
+	cancelOwner()
+	require.ErrorIs(t, <-ownerResult, context.Canceled)
+	release()
+
+	waiter := <-waiterResult
+	require.NoError(t, waiter.err)
+	assert.Equal(t, "token-2", waiter.token)
+}
+
 func TestTokenWrapsAnIssuerError(t *testing.T) {
 	issuer := newFakeIssuer(t)
 	issuer.setTokenStatus(http.StatusUnauthorized)
@@ -288,6 +486,52 @@ func TestHTTPClientSetsTheBearerToken(t *testing.T) {
 	require.NoError(t, response.Body.Close())
 
 	assert.Equal(t, "Bearer token-1", authorization.Load())
+}
+
+func TestHTTPClientFollowsSameOriginRedirects(t *testing.T) {
+	issuer := newFakeIssuer(t)
+	tokenSource := newTestTokenSource(t, issuer)
+
+	var authorization atomic.Value
+	mux := http.NewServeMux()
+	mux.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/target", http.StatusFound)
+	})
+	mux.HandleFunc("/target", func(_ http.ResponseWriter, r *http.Request) {
+		authorization.Store(r.Header.Get("Authorization"))
+	})
+	upstream := httptest.NewServer(mux)
+	t.Cleanup(upstream.Close)
+
+	response, err := tokenSource.HTTPClient(nil).Get(upstream.URL + "/start")
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+
+	assert.Equal(t, "Bearer token-1", authorization.Load())
+}
+
+func TestHTTPClientRejectsCrossOriginRedirects(t *testing.T) {
+	issuer := newFakeIssuer(t)
+	tokenSource := newTestTokenSource(t, issuer)
+
+	var targetCalls atomic.Int32
+	var targetAuthorization atomic.Value
+	target := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		targetCalls.Add(1)
+		targetAuthorization.Store(r.Header.Get("Authorization"))
+	}))
+	t.Cleanup(target.Close)
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusFound)
+	}))
+	t.Cleanup(redirector.Close)
+
+	_, err := tokenSource.HTTPClient(nil).Get(redirector.URL)
+
+	require.Error(t, err)
+	assert.Equal(t, int32(0), targetCalls.Load())
+	assert.Nil(t, targetAuthorization.Load())
 }
 
 func TestHTTPClientFailsWhenNoTokenCanBeMinted(t *testing.T) {
