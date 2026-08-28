@@ -133,19 +133,12 @@ func (t *TokenSource) Token(ctx context.Context) (string, error) {
 		if inFlight := t.inFlight; inFlight != nil {
 			t.mu.Unlock()
 
-			select {
-			case <-inFlight.done:
-				if err := ctx.Err(); err != nil {
-					return "", err
-				}
-				if inFlight.ownerCanceled {
-					continue
-				}
-
-				return inFlight.token, inFlight.err
-			case <-ctx.Done():
-				return "", ctx.Err()
+			token, err, retry := waitForTokenFetch(ctx, inFlight)
+			if retry {
+				continue
 			}
+
+			return token, err
 		}
 
 		inFlight := &tokenFetch{done: make(chan struct{})}
@@ -176,6 +169,22 @@ func (t *TokenSource) Token(ctx context.Context) (string, error) {
 		t.mu.Unlock()
 
 		return inFlight.token, inFlight.err
+	}
+}
+
+func waitForTokenFetch(ctx context.Context, inFlight *tokenFetch) (token string, err error, retry bool) {
+	select {
+	case <-inFlight.done:
+		if err := ctx.Err(); err != nil {
+			return "", err, false
+		}
+		if inFlight.ownerCanceled {
+			return "", nil, true
+		}
+
+		return inFlight.token, inFlight.err, false
+	case <-ctx.Done():
+		return "", ctx.Err(), false
 	}
 }
 

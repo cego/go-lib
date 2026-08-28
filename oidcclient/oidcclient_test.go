@@ -35,7 +35,8 @@ type fakeIssuer struct {
 }
 
 type notifyingContext struct {
-	context.Context
+	done   <-chan struct{}
+	err    func() error
 	called chan<- struct{}
 	once   sync.Once
 }
@@ -45,10 +46,26 @@ type tokenResult struct {
 	err   error
 }
 
+func newNotifyingContext(ctx context.Context, called chan<- struct{}) *notifyingContext {
+	return &notifyingContext{done: ctx.Done(), err: ctx.Err, called: called}
+}
+
+func (c *notifyingContext) Deadline() (time.Time, bool) {
+	return time.Time{}, false
+}
+
 func (c *notifyingContext) Done() <-chan struct{} {
 	c.once.Do(func() { c.called <- struct{}{} })
 
-	return c.Context.Done()
+	return c.done
+}
+
+func (c *notifyingContext) Err() error {
+	return c.err()
+}
+
+func (c *notifyingContext) Value(any) any {
+	return nil
 }
 
 func newFakeIssuer(t *testing.T) *fakeIssuer {
@@ -339,7 +356,7 @@ func TestTokenSharesAnIssuerFailureForConcurrentCallers(t *testing.T) {
 	results := make(chan tokenResult, waiterCount)
 	ready := make(chan struct{}, waiterCount)
 	for range waiterCount {
-		ctx := &notifyingContext{Context: context.Background(), called: ready}
+		ctx := newNotifyingContext(context.Background(), ready)
 		go func() {
 			token, err := tokenSource.Token(ctx)
 			results <- tokenResult{token: token, err: err}
@@ -376,7 +393,7 @@ func TestTokenWaiterCanCancelWhileFetchIsInProgress(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waiterStarted := make(chan struct{}, 1)
-	notifyingCtx := &notifyingContext{Context: ctx, called: waiterStarted}
+	notifyingCtx := newNotifyingContext(ctx, waiterStarted)
 	waiterResult := make(chan error, 1)
 	go func() {
 		_, err := tokenSource.Token(notifyingCtx)
@@ -410,7 +427,7 @@ func TestCanceledOwnerDoesNotPoisonLiveWaiter(t *testing.T) {
 	<-started
 
 	waiterStarted := make(chan struct{}, 1)
-	waiterCtx := &notifyingContext{Context: context.Background(), called: waiterStarted}
+	waiterCtx := newNotifyingContext(context.Background(), waiterStarted)
 	waiterResult := make(chan tokenResult, 1)
 	go func() {
 		token, err := tokenSource.Token(waiterCtx)
