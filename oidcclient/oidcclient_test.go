@@ -181,21 +181,6 @@ func TestNewRejectsIncompleteConfig(t *testing.T) {
 			errors: "must use https",
 		},
 		{
-			name:   "issuer without host",
-			config: oidcclient.Config{Issuer: "https:///issuer", ClientID: testClientID, ClientSecret: testClientSecret},
-			errors: "must be an absolute URL with a host",
-		},
-		{
-			name:   "malformed issuer",
-			config: oidcclient.Config{Issuer: "https://[::1", ClientID: testClientID, ClientSecret: testClientSecret},
-			errors: "parsing issuer",
-		},
-		{
-			name:   "ftp loopback issuer",
-			config: oidcclient.Config{Issuer: "ftp://127.0.0.1", ClientID: testClientID, ClientSecret: testClientSecret},
-			errors: "must use https",
-		},
-		{
 			name:   "missing client id",
 			config: oidcclient.Config{Issuer: "https://issuer.example.com", ClientSecret: testClientSecret},
 			errors: "client id is required",
@@ -214,6 +199,27 @@ func TestNewRejectsIncompleteConfig(t *testing.T) {
 			require.Error(t, err)
 			assert.Nil(t, tokenSource)
 			assert.ErrorContains(t, err, tt.errors)
+		})
+	}
+}
+
+func TestNewRejectsInvalidIssuer(t *testing.T) {
+	tests := map[string]string{
+		"https:///issuer": "must be an absolute URL with a host",
+		"https://[::1":    "parsing issuer",
+		"ftp://127.0.0.1": "must use https",
+	}
+
+	for issuer, expectedError := range tests {
+		t.Run(issuer, func(t *testing.T) {
+			tokenSource, err := oidcclient.New(oidcclient.Config{
+				Issuer:       issuer,
+				ClientID:     testClientID,
+				ClientSecret: testClientSecret,
+			})
+
+			require.ErrorContains(t, err, expectedError)
+			assert.Nil(t, tokenSource)
 		})
 	}
 }
