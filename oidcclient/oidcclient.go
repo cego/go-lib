@@ -113,10 +113,6 @@ func New(cfg Config, opts ...OptionFunc) (*TokenSource, error) {
 // Token returns an access token for the client, reusing the cached one until it
 // is within the refresh window of expiring.
 func (t *TokenSource) Token(ctx context.Context) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-
 	for {
 		if err := ctx.Err(); err != nil {
 			return "", err
@@ -150,10 +146,7 @@ func (t *TokenSource) Token(ctx context.Context) (string, error) {
 		t.mu.Unlock()
 
 		token, tokenURL, err := t.fetchToken(ctx, tokenURL)
-		inFlight.token, inFlight.err = "", err
-		if token != nil {
-			inFlight.token = token.AccessToken
-		}
+		inFlight.token, inFlight.err = accessToken(token), err
 		inFlight.ownerCanceled = contextCancellation(ctx, err)
 
 		t.mu.Lock()
@@ -170,6 +163,14 @@ func (t *TokenSource) Token(ctx context.Context) (string, error) {
 
 		return inFlight.token, inFlight.err
 	}
+}
+
+func accessToken(token *oauth2.Token) string {
+	if token == nil {
+		return ""
+	}
+
+	return token.AccessToken
 }
 
 func waitForTokenFetch(ctx context.Context, inFlight *tokenFetch) (token string, err error, retry bool) {
