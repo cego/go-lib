@@ -1,11 +1,11 @@
-package logger
+package loggertest
 
 import (
+	"github.com/cego/go-lib/v2/logger"
 	"github.com/stretchr/testify/mock"
 )
 
-// Interface guard
-var _ Logger = (*Mock)(nil)
+var _ logger.Logger = (*Mock)(nil)
 
 type Mock struct {
 	mock.Mock

@@ -45,7 +45,7 @@ l := logger.NewWithLevel(slog.LevelInfo)
 slog.SetDefault(l)
 
 // Testing with mock logger
-l := logger.NewMock()
+l := loggertest.NewMock()
 r := renderer.New(l)
 ```
 

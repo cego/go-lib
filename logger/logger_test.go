@@ -9,6 +9,7 @@ import (
 
 	"github.com/cego/go-lib/v2/headers"
 	"github.com/cego/go-lib/v2/logger"
+	"github.com/cego/go-lib/v2/logger/loggertest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -32,7 +33,7 @@ func TestLogger(t *testing.T) {
 		req.Header.Set(headers.UserAgent, "curl/8.7")
 		req.Header.Set(headers.Cookie, "verysecretstuff")
 		req.Header.Set(headers.Authorization, "alsoverysecretstuff")
-		l := logger.NewMock()
+		l := loggertest.NewMock()
 		l.On("Debug", mock.Anything, mock.Anything).Return()
 
 		l.Debug("Epic request data is attached", logger.GetSlogAttrFromRequest(req))
@@ -50,7 +51,7 @@ func TestLogger(t *testing.T) {
 
 	t.Run("it can get err attr", func(t *testing.T) {
 		err := errors.New("test error")
-		l := logger.NewMock()
+		l := loggertest.NewMock()
 		l.On("Error", mock.Anything, mock.Anything).Return()
 
 		l.Error("Something has failed here", logger.GetSlogAttrFromError(err))

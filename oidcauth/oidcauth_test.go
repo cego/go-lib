@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cego/go-lib/v2/logger"
+	"github.com/cego/go-lib/v2/logger/loggertest"
 	"github.com/cego/go-lib/v2/oidcauth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +37,7 @@ func newTestServer(t *testing.T, idp *fakeIDP, role string, opts ...oidcauth.Opt
 	t.Cleanup(server.Close)
 	idp.AllowRedirectURI(server.URL + oidcauth.CallbackPath)
 
-	auth, err := oidcauth.New(context.Background(), logger.NewMock(), oidcauth.Config{
+	auth, err := oidcauth.New(context.Background(), loggertest.NewMock(), oidcauth.Config{
 		Issuer:       idp.IssuerURL(),
 		ClientID:     testClientID,
 		ClientSecret: testClientSecret,
@@ -303,13 +303,13 @@ func TestOidcAuth(t *testing.T) {
 
 	t.Run("http issuer and base url are refused", func(t *testing.T) {
 		idp := newFakeIDP(t)
-		_, err := oidcauth.New(context.Background(), logger.NewMock(), oidcauth.Config{
+		_, err := oidcauth.New(context.Background(), loggertest.NewMock(), oidcauth.Config{
 			Issuer: "http://keycloak.example.com/realms/cego", ClientID: testClientID,
 			ClientSecret: testClientSecret, BaseURL: "https://example.com",
 		})
 		require.ErrorContains(t, err, "issuer must be https")
 
-		_, err = oidcauth.New(context.Background(), logger.NewMock(), oidcauth.Config{
+		_, err = oidcauth.New(context.Background(), loggertest.NewMock(), oidcauth.Config{
 			Issuer: idp.IssuerURL(), ClientID: testClientID,
 			ClientSecret: testClientSecret, BaseURL: "http://example.com",
 		}, oidcauth.WithHTTPClient(idp.Client()))
@@ -470,7 +470,7 @@ func TestOidcAuth(t *testing.T) {
 
 	t.Run("http on loopback is allowed for local development", func(t *testing.T) {
 		idp := newFakeIDP(t)
-		_, err := oidcauth.New(context.Background(), logger.NewMock(), oidcauth.Config{
+		_, err := oidcauth.New(context.Background(), loggertest.NewMock(), oidcauth.Config{
 			Issuer: idp.IssuerURL(), ClientID: testClientID,
 			ClientSecret: testClientSecret, BaseURL: "http://localhost:8080",
 		}, oidcauth.WithHTTPClient(idp.Client()))
@@ -485,7 +485,7 @@ func TestOidcAuth(t *testing.T) {
 		t.Cleanup(server.Close)
 		idp.AllowRedirectURI(server.URL + oidcauth.CallbackPath)
 
-		auth, err := oidcauth.New(context.Background(), logger.NewMock(), oidcauth.Config{
+		auth, err := oidcauth.New(context.Background(), loggertest.NewMock(), oidcauth.Config{
 			Issuer: idp.IssuerURL(), ClientID: testClientID,
 			ClientSecret: testClientSecret, BaseURL: server.URL,
 		}, oidcauth.WithHTTPClient(idp.Client()))
@@ -547,7 +547,7 @@ func TestOidcAuth(t *testing.T) {
 			{oidcauth.Config{Issuer: idp.IssuerURL(), ClientID: "", ClientSecret: "s", BaseURL: "https://example.com"}, "client id is required"},
 			{oidcauth.Config{Issuer: idp.IssuerURL(), ClientID: "c", ClientSecret: "", BaseURL: "https://example.com"}, "client secret is required"},
 		} {
-			_, err := oidcauth.New(context.Background(), logger.NewMock(), tc.cfg, oidcauth.WithHTTPClient(idp.Client()))
+			_, err := oidcauth.New(context.Background(), loggertest.NewMock(), tc.cfg, oidcauth.WithHTTPClient(idp.Client()))
 			require.ErrorContains(t, err, tc.want)
 		}
 	})
@@ -599,7 +599,7 @@ func TestOidcAuth(t *testing.T) {
 	})
 
 	t.Run("discovery failure is reported", func(t *testing.T) {
-		_, err := oidcauth.New(context.Background(), logger.NewMock(), oidcauth.Config{
+		_, err := oidcauth.New(context.Background(), loggertest.NewMock(), oidcauth.Config{
 			Issuer:       "https://127.0.0.1:1/realms/nope",
 			ClientID:     testClientID,
 			ClientSecret: testClientSecret,

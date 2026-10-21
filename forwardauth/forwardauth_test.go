@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cego/go-lib/v2/forwardauth"
-	"github.com/cego/go-lib/v2/logger"
+	"github.com/cego/go-lib/v2/logger/loggertest"
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,7 +21,7 @@ func (t *TestAllGoodHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 func TestForwardAuthHandler(t *testing.T) {
 	t.Run("forward auth handler passthrough", func(t *testing.T) {
 		allGoodHandler := &TestAllGoodHandler{}
-		l := logger.NewMock()
+		l := loggertest.NewMock()
 		httpmock.Activate(t)
 		defer httpmock.Reset()
 		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(200, "Cookie n' ACL matches let him in"))
@@ -40,7 +40,7 @@ func TestForwardAuthHandler(t *testing.T) {
 	})
 
 	t.Run("forward auth handlerfunc passthrough", func(t *testing.T) {
-		l := logger.NewMock()
+		l := loggertest.NewMock()
 		httpmock.Activate(t)
 		defer httpmock.Reset()
 		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(200, "Cookie n' ACL matches let him in"))
@@ -59,7 +59,7 @@ func TestForwardAuthHandler(t *testing.T) {
 
 	t.Run("forward auth handler unauthorized", func(t *testing.T) {
 		allGoodHandler := &TestAllGoodHandler{}
-		l := logger.NewMock()
+		l := loggertest.NewMock()
 		httpmock.Activate(t)
 		defer httpmock.Reset()
 		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(401, "Did you send a cookie?"))
@@ -76,7 +76,7 @@ func TestForwardAuthHandler(t *testing.T) {
 
 	t.Run("forward auth handler forbidden", func(t *testing.T) {
 		allGoodHandler := &TestAllGoodHandler{}
-		l := logger.NewMock()
+		l := loggertest.NewMock()
 		httpmock.Activate(t)
 		defer httpmock.Reset()
 		httpmock.RegisterResponder("GET", "https://sso.example.com/auth", httpmock.NewStringResponder(403, "Valid login, but you have been forbidden"))

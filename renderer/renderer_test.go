@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/cego/go-lib/v2/headers"
-	"github.com/cego/go-lib/v2/logger"
+	"github.com/cego/go-lib/v2/logger/loggertest"
 	"github.com/cego/go-lib/v2/renderer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -32,7 +32,7 @@ func (f *FaultyResponseWriter) WriteHeader(int) {}
 
 func TestRenderer(t *testing.T) {
 	t.Run("JSON renders correctly", func(t *testing.T) {
-		l := &logger.Mock{}
+		l := &loggertest.Mock{}
 		r := renderer.New(l)
 		rec := httptest.NewRecorder()
 
@@ -45,7 +45,7 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("JSON logs error on encoding failure", func(t *testing.T) {
-		l := &logger.Mock{}
+		l := &loggertest.Mock{}
 		r := renderer.New(l)
 		rec := httptest.NewRecorder()
 
@@ -61,7 +61,7 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("JSON logs error on write failure", func(t *testing.T) {
-		l := &logger.Mock{}
+		l := &loggertest.Mock{}
 		r := renderer.New(l)
 		rec := &FaultyResponseWriter{}
 
@@ -73,7 +73,7 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("Text renders correctly", func(t *testing.T) {
-		l := &logger.Mock{}
+		l := &loggertest.Mock{}
 		r := renderer.New(l)
 		rec := httptest.NewRecorder()
 
@@ -85,7 +85,7 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("Text logs error on write failure", func(t *testing.T) {
-		l := &logger.Mock{}
+		l := &loggertest.Mock{}
 		r := renderer.New(l)
 		rec := &FaultyResponseWriter{}
 
@@ -97,7 +97,7 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("Data renders correctly", func(t *testing.T) {
-		l := &logger.Mock{}
+		l := &loggertest.Mock{}
 		r := renderer.New(l)
 		rec := httptest.NewRecorder()
 
@@ -109,7 +109,7 @@ func TestRenderer(t *testing.T) {
 	})
 
 	t.Run("Data logs error on write failure", func(t *testing.T) {
-		l := &logger.Mock{}
+		l := &loggertest.Mock{}
 		r := renderer.New(l)
 		rec := &FaultyResponseWriter{}
 
