@@ -43,7 +43,7 @@ func newSlogger(level slog.Level) *slog.Logger {
 			return a
 		},
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
+	return slog.New(slog.NewJSONHandler(os.Stdout, opts)).With(slog.String("ecs.version", "8.11.0"))
 }
 
 func GetSlogAttrFromError(err error) slog.Attr {
