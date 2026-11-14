@@ -58,6 +58,7 @@ func TestLogger(t *testing.T) {
 
 		validators := map[string]func(string) bool{
 			"message":     func(v string) bool { return v == "test error" },
+			"type":        func(v string) bool { return v == "*errors.errorString" },
 			"stack_trace": func(v string) bool { return len(v) > 0 },
 		}
 		l.AssertCalled(t, "Error", "Something has failed here", mock.MatchedBy(MatchSlogGroup("error", validators)))
