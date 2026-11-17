@@ -87,8 +87,8 @@ mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWriter, req *http.Reques
 ## Using OidcAuth
 
 Authorization code flow with PKCE for browsers, bearer tokens for api clients. The verified id token
-is the session cookie, so there is no session store. When the provider hands out a refresh token, it is
-kept in a second cookie and renews the session when the id token runs out.
+is the session cookie, so there is no session store. When the provider supports token revocation and
+hands out a refresh token, it is kept in a second cookie and renews the session when the id token runs out.
 
 ```go
 mux := http.NewServeMux()
@@ -118,11 +118,21 @@ user.HasAnyRole("reader", "tool-admin")
 - Issuer and base url must be https, except on loopback
 - A session lasts as long as the id token. A refresh renews it without a redirect, and reads the roles anew,
   until the provider ends the session
+- Refresh requires a discovered `revocation_endpoint` supporting `client_secret_basic` (the default)
+  or `client_secret_post`. Otherwise, authentication uses only the id token. Configure the provider to
+  revoke the refresh-token grant, including any rotated predecessors still accepted during a grace period
 - A refresh token is exchanged once per process for the requests that arrive holding it. Behind several
   replicas, a provider that rotates refresh tokens sends some of those requests back to login
+- Each auth instance allows 32 concurrent refresh/revocation operations and up to 1024 cached token hashes;
+  excess requests get `503`. Exchanges time out after 10 seconds, including with a custom HTTP client.
+  Apply request rate limiting before this middleware to protect the provider from sustained traffic
 - No session: browsers go to the provider, htmx gets `HX-Redirect`, api clients get `401`
-- Logout is a `POST`, and hands the provider no token, so it asks the user to confirm
-- Sessions cannot be revoked before the id token expires, so keep that lifetime short
+- Logout is a `POST`: it invalidates local refresh results and revokes the refresh token before clearing
+  its cookie. Revocation failure returns `503` and keeps the outstanding token in that cookie so logout
+  can be retried even after a rotation and cache expiry.
+  The provider logout redirect contains no token and may ask the user to confirm
+- Already-issued id tokens remain valid until expiry, so keep that lifetime short. Other replicas can
+  still reuse a cached refresh result for up to 10 seconds (never beyond the id token's expiry)
 - Cookies are `__Host-` prefixed, secure and `SameSite=Lax`, which is not a CSRF token
 - `User` implements `slog.LogValuer`, so `"user", user` logs the ecs shaped group
 

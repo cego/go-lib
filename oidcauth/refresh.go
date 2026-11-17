@@ -20,7 +20,10 @@ const (
 	defaultRefreshCookieMaxAge = 24 * time.Hour
 
 	// refreshLinger is how long the outcome of a refresh answers requests that still hold the token it used.
-	refreshLinger = 10 * time.Second
+	refreshLinger       = 10 * time.Second
+	tokenRequestTimeout = 10 * time.Second
+	maxTokenRequests    = 32
+	maxRefreshEntries   = 1024
 )
 
 // session is what a login or a refresh yields: the user, and the tokens kept in cookies.
@@ -70,85 +73,180 @@ func (o *OidcAuth) sessionFrom(ctx context.Context, token *oauth2.Token) (sessio
 func (o *OidcAuth) setSession(w http.ResponseWriter, s session) {
 	o.setCookie(w, sessionCookie, s.rawIDToken, time.Until(s.expiry))
 
-	if s.refreshToken == "" || len(s.refreshToken) > maxSessionCookieBytes {
+	if o.revocationURL == "" || s.refreshToken == "" || len(s.refreshToken) > maxSessionCookieBytes {
 		o.clearCookie(w, refreshCookie)
 		return
 	}
 	o.setCookie(w, refreshCookie, s.refreshToken, s.refreshMaxAge)
 }
 
-// refreshSession renews the session of a browser whose id token ran out, when it holds a refresh token the provider still honours.
+var errRefreshBusy = errors.New("too many token requests")
+
+// refreshSession renews a browser session using a revocable refresh token.
 func (o *OidcAuth) refreshSession(w http.ResponseWriter, r *http.Request) (User, error) {
-	if r.Header.Get(headers.Authorization) != "" {
-		return User{}, errors.New("a bearer token is not refreshed")
+	if r.Header.Get(headers.Authorization) != "" || o.revocationURL == "" {
+		return User{}, errors.New("refresh unavailable")
 	}
 
 	cookie, err := r.Cookie(o.cookieName(refreshCookie))
-	if err != nil || cookie.Value == "" {
-		return User{}, errors.New("no refresh token")
+	if err != nil || cookie.Value == "" || len(cookie.Value) > maxSessionCookieBytes {
+		return User{}, errors.New("no usable refresh token")
 	}
 
-	// A request that goes away must not fail the others waiting on the same refresh.
-	ctx := coreoidc.ClientContext(context.WithoutCancel(r.Context()), o.httpClient)
-	refreshed, err := o.refreshes.do(cookie.Value, func() (session, error) {
+	var user User
+	err = o.refreshes.do(r.Context(), cookie.Value, func(ctx context.Context) (session, error) {
+		select {
+		case o.tokenRequests <- struct{}{}:
+			defer func() { <-o.tokenRequests }()
+		default:
+			return session{}, errRefreshBusy
+		}
+		ctx = coreoidc.ClientContext(ctx, o.httpClient)
 		token, err := o.oauth.TokenSource(ctx, &oauth2.Token{RefreshToken: cookie.Value}).Token()
 		if err != nil {
 			return session{}, fmt.Errorf("exchanging refresh token: %w", err)
 		}
-
 		refreshed, _, err := o.sessionFrom(ctx, token)
-
+		// Keep the rotated token available for logout even if ID token validation fails.
+		refreshed.refreshToken = token.RefreshToken
 		return refreshed, err
+	}, func(refreshed session) {
+		o.setSession(w, refreshed)
+		user = refreshed.user
 	})
 	if err != nil {
 		o.logger.Info("could not refresh the session", logger.GetSlogAttrFromError(err))
-		return User{}, err
 	}
-
-	o.setSession(w, refreshed)
-
-	return refreshed.user, nil
+	return user, err
 }
 
-// refreshes exchanges a refresh token once, and gives every request that arrives holding it the same outcome.
-// A page often sends several requests at once, and a provider that rotates refresh tokens only honours the first.
+// Both token hashes share a call so logout also invalidates requests using a rotated token.
 type refreshes struct {
-	mu    sync.Mutex
-	calls map[[sha256.Size]byte]*refreshCall
+	mu      sync.Mutex
+	calls   map[[sha256.Size]byte]*refreshCall
+	running int
 }
 
 type refreshCall struct {
 	done    chan struct{}
 	session session
 	err     error
+	expires time.Time
+	revoked bool
 }
 
-func (f *refreshes) do(refreshToken string, exchange func() (session, error)) (session, error) {
-	key := sha256.Sum256([]byte(refreshToken))
-
-	f.mu.Lock()
+func (f *refreshes) prune() {
+	for key, call := range f.calls {
+		if !call.expires.IsZero() && !time.Now().Before(call.expires) {
+			delete(f.calls, key)
+		}
+	}
 	if f.calls == nil {
 		f.calls = map[[sha256.Size]byte]*refreshCall{}
 	}
+}
+
+func (f *refreshes) do(ctx context.Context, token string, exchange func(context.Context) (session, error), accept func(session)) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	key := sha256.Sum256([]byte(token))
+	f.mu.Lock()
+	f.prune()
 	call, found := f.calls[key]
 	if !found {
+		// Reserve one entry for the token returned by a rotating provider.
+		if len(f.calls)+f.running+2 > maxRefreshEntries {
+			f.mu.Unlock()
+			return errRefreshBusy
+		}
 		call = &refreshCall{done: make(chan struct{})}
 		f.calls[key] = call
+		f.running++
+		go func() {
+			// A disconnected requester must not cancel another request's refresh.
+			exchangeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tokenRequestTimeout)
+			defer cancel()
+			s, err := exchange(exchangeCtx)
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			f.running--
+			call.session, call.err = s, err
+			call.expires = time.Now().Add(refreshLinger)
+			if err == nil && s.expiry.Before(call.expires) {
+				call.expires = s.expiry
+			}
+			if s.refreshToken != "" {
+				alias := sha256.Sum256([]byte(s.refreshToken))
+				if existing := f.calls[alias]; existing != nil && existing != call {
+					// Overlapping exchanges must not replace another call's revocation state.
+					call.revoked = true
+					existing.revoked = true
+				} else {
+					f.calls[alias] = call
+				}
+			}
+			if call.revoked {
+				call.expires = time.Now().Add(2*tokenRequestTimeout + refreshLinger)
+			}
+			close(call.done)
+		}()
 	}
 	f.mu.Unlock()
 
-	if found {
-		<-call.done
-		return call.session, call.err
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-call.done:
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if call.revoked {
+		return errors.New("session revoked")
+	}
+	if call.err != nil {
+		return call.err
+	}
+	if !time.Now().Before(call.session.expiry) || !time.Now().Before(call.expires) {
+		return errors.New("refreshed session expired")
+	}
+	accept(call.session)
+	return nil
+}
 
-	call.session, call.err = exchange()
-	close(call.done)
-	time.AfterFunc(refreshLinger, func() {
-		f.mu.Lock()
-		delete(f.calls, key)
-		f.mu.Unlock()
-	})
+func (f *refreshes) invalidate(ctx context.Context, token string) ([]string, error) {
+	key := sha256.Sum256([]byte(token))
+	f.mu.Lock()
+	f.prune()
+	call := f.calls[key]
+	if call == nil {
+		if len(f.calls)+f.running+1 > maxRefreshEntries {
+			f.mu.Unlock()
+			return nil, errRefreshBusy
+		}
+		call = &refreshCall{done: make(chan struct{}), expires: time.Now()}
+		close(call.done)
+		f.calls[key] = call
+	}
+	call.revoked = true
+	if !call.expires.IsZero() {
+		call.expires = time.Now().Add(2*tokenRequestTimeout + refreshLinger)
+	}
+	f.mu.Unlock()
 
-	return call.session, call.err
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-call.done:
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	tokens := []string{token}
+	if rotated := call.session.refreshToken; rotated != "" && rotated != token {
+		tokens = append(tokens, rotated)
+	}
+	return tokens, nil
 }

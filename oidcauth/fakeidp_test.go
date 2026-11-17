@@ -59,6 +59,7 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 	mux.HandleFunc("/jwks", idp.handleJWKS)
 	mux.HandleFunc("/auth", idp.handleAuthorize)
 	mux.HandleFunc("/token", idp.handleToken)
+	mux.HandleFunc("/revoke", idp.handleRevoke)
 	idp.server = httptest.NewTLSServer(mux)
 	t.Cleanup(idp.server.Close)
 	return idp
@@ -163,6 +164,7 @@ func (idp *fakeIDP) handleDiscovery(w http.ResponseWriter, _ *http.Request) {
 		"issuer":                                u,
 		"authorization_endpoint":                u + "/auth",
 		"token_endpoint":                        u + "/token",
+		"revocation_endpoint":                   u + "/revoke",
 		"end_session_endpoint":                  u + "/logout",
 		"jwks_uri":                              u + "/jwks",
 		"id_token_signing_alg_values_supported": []string{"RS256"},
@@ -304,6 +306,21 @@ func (idp *fakeIDP) handleRefresh(w http.ResponseWriter, refreshToken string) {
 		return
 	}
 	idp.respond(w, claims, refreshToken, "")
+}
+
+func (idp *fakeIDP) handleRevoke(w http.ResponseWriter, r *http.Request) {
+	clientID, clientSecret, ok := r.BasicAuth()
+	if !ok {
+		clientID, clientSecret = r.PostFormValue("client_id"), r.PostFormValue("client_secret")
+	}
+	if r.Method != http.MethodPost || clientID != testClientID || clientSecret != testClientSecret {
+		http.Error(w, "invalid client", http.StatusUnauthorized)
+		return
+	}
+	idp.mu.Lock()
+	delete(idp.sessions, r.PostFormValue("token"))
+	idp.mu.Unlock()
+	w.WriteHeader(http.StatusOK)
 }
 
 func (idp *fakeIDP) respondWithSession(w http.ResponseWriter, claims map[string]any, nonce string) {
