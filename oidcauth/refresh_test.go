@@ -39,6 +39,18 @@ func expireSession(t *testing.T, client *http.Client, serverURL string) {
 	client.Jar.SetCookies(target, []*http.Cookie{{Name: sessionCookieName, Path: "/", Secure: true, MaxAge: -1}})
 }
 
+func getWith(t *testing.T, client *http.Client, url, header, value string) *http.Response {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	require.NoError(t, err)
+	request.Header.Set(header, value)
+
+	response, err := client.Do(request)
+	require.NoError(t, err)
+
+	return response
+}
+
 func jarCookie(t *testing.T, client *http.Client, serverURL, name string) string {
 	t.Helper()
 	target, err := url.Parse(serverURL)
@@ -79,11 +91,7 @@ func TestRefresh(t *testing.T) {
 		serverURL, client := loggedIn(t, idp)
 		expireSession(t, client, serverURL)
 
-		request, err := http.NewRequest(http.MethodGet, serverURL+"/protected", nil)
-		require.NoError(t, err)
-		request.Header.Set("HX-Request", "true")
-		response, err := client.Do(request)
-		require.NoError(t, err)
+		response := getWith(t, client, serverURL+"/protected", "HX-Request", "true")
 		defer func() { _ = response.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, response.StatusCode)
@@ -163,11 +171,7 @@ func TestRefresh(t *testing.T) {
 		serverURL, client := loggedIn(t, idp)
 		expireSession(t, client, serverURL)
 
-		request, err := http.NewRequest(http.MethodGet, serverURL+"/protected", nil)
-		require.NoError(t, err)
-		request.Header.Set("Authorization", "Bearer not-a-token")
-		response, err := client.Do(request)
-		require.NoError(t, err)
+		response := getWith(t, client, serverURL+"/protected", "Authorization", "Bearer not-a-token")
 		defer func() { _ = response.Body.Close() }()
 
 		assert.Equal(t, http.StatusUnauthorized, response.StatusCode)
