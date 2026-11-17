@@ -155,54 +155,28 @@ func TestLogoutOfReturnedAliasDuringRefresh(t *testing.T) {
 	})
 }
 
-type revokeTransport func(*http.Request) (*http.Response, error)
-
-func (f revokeTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
-func TestLogoutRetryAfterRotationCacheExpires(t *testing.T) {
+func TestLogoutCompletesWhenRevocationTimesOut(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		fail := true
-		var revoked []string
 		l := loggertest.NewMock()
 		o := &OidcAuth{
 			logger: l, renderer: renderer.New(l),
 			revocationURL: "https://example.com/revoke", tokenRequests: make(chan struct{}, maxTokenRequests),
-			httpClient: &http.Client{Transport: revokeTransport(func(r *http.Request) (*http.Response, error) {
-				token := r.PostFormValue("token")
-				status := http.StatusOK
-				if fail && token == "rotated" {
-					status = http.StatusServiceUnavailable
-				} else {
-					revoked = append(revoked, token)
-				}
-				return &http.Response{StatusCode: status, Body: http.NoBody}, nil
-			})},
+			httpClient: &http.Client{Transport: blockedTokenTransport{}},
 		}
-		require.NoError(t, o.refreshes.do(t.Context(), "original", func(context.Context) (session, error) {
-			return session{refreshToken: "rotated", expiry: time.Now().Add(time.Minute)}, nil
-		}, func(session) {}))
-		logout := func(token string) *httptest.ResponseRecorder {
-			r := httptest.NewRequest(http.MethodPost, LogoutPath, nil)
-			r.AddCookie(&http.Cookie{Name: o.cookieName(refreshCookie), Value: token})
-			w := httptest.NewRecorder()
-			o.Logout(w, r)
-			return w
-		}
-		first := logout("original")
-		require.Equal(t, http.StatusServiceUnavailable, first.Code)
-		res := first.Result()
+		r := httptest.NewRequest(http.MethodPost, LogoutPath, nil)
+		r.AddCookie(&http.Cookie{Name: o.cookieName(refreshCookie), Value: "token"})
+		w := httptest.NewRecorder()
+		start := time.Now()
+		o.Logout(w, r)
+		assert.Equal(t, tokenRequestTimeout, time.Since(start))
+		require.Equal(t, http.StatusSeeOther, w.Code)
+		res := w.Result()
 		defer func() { _ = res.Body.Close() }()
-		var retry string
+		require.Len(t, res.Cookies(), 2)
 		for _, cookie := range res.Cookies() {
-			if cookie.Name == o.cookieName(refreshCookie) {
-				retry = cookie.Value
-			}
+			assert.Empty(t, cookie.Value)
+			assert.Equal(t, -1, cookie.MaxAge)
 		}
-		require.Equal(t, "rotated", retry)
-		time.Sleep(2*tokenRequestTimeout + refreshLinger + time.Second)
-		fail = false
-		require.Equal(t, http.StatusSeeOther, logout(retry).Code)
-		assert.Contains(t, revoked, "rotated")
 	})
 }
 

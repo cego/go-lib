@@ -11,33 +11,27 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func (o *OidcAuth) revokeSession(ctx context.Context, token string) (string, error) {
+func (o *OidcAuth) revokeSession(ctx context.Context, token string) error {
 	if len(token) > maxSessionCookieBytes {
-		return token, errors.New("refresh token too large")
+		return errors.New("refresh token too large")
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*tokenRequestTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tokenRequestTimeout)
 	defer cancel()
 	tokens, err := o.refreshes.invalidate(ctx, token)
-	if err != nil {
-		return token, err
+	if err != nil || o.revocationURL == "" {
+		return err
 	}
 	select {
 	case o.tokenRequests <- struct{}{}:
 		defer func() { <-o.tokenRequests }()
 	default:
-		return tokens[len(tokens)-1], errRefreshBusy
+		return errRefreshBusy
 	}
 	var failures []error
-	var retry string
 	for i := len(tokens) - 1; i >= 0; i-- {
-		if err := o.revokeToken(ctx, tokens[i]); err != nil {
-			if retry == "" {
-				retry = tokens[i]
-			}
-			failures = append(failures, err)
-		}
+		failures = append(failures, o.revokeToken(ctx, tokens[i]))
 	}
-	return retry, errors.Join(failures...)
+	return errors.Join(failures...)
 }
 
 func (o *OidcAuth) revokeToken(ctx context.Context, token string) error {

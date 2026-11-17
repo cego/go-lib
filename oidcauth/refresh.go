@@ -73,7 +73,7 @@ func (o *OidcAuth) sessionFrom(ctx context.Context, token *oauth2.Token) (sessio
 func (o *OidcAuth) setSession(w http.ResponseWriter, s session) {
 	o.setCookie(w, sessionCookie, s.rawIDToken, time.Until(s.expiry))
 
-	if o.revocationURL == "" || s.refreshToken == "" || len(s.refreshToken) > maxSessionCookieBytes {
+	if s.refreshToken == "" || len(s.refreshToken) > maxSessionCookieBytes {
 		o.clearCookie(w, refreshCookie)
 		return
 	}
@@ -82,10 +82,10 @@ func (o *OidcAuth) setSession(w http.ResponseWriter, s session) {
 
 var errRefreshBusy = errors.New("too many token requests")
 
-// refreshSession renews a browser session using a revocable refresh token.
+// refreshSession renews a browser session using a refresh token.
 func (o *OidcAuth) refreshSession(w http.ResponseWriter, r *http.Request) (User, error) {
-	if r.Header.Get(headers.Authorization) != "" || o.revocationURL == "" {
-		return User{}, errors.New("refresh unavailable")
+	if r.Header.Get(headers.Authorization) != "" {
+		return User{}, errors.New("a bearer token is not refreshed")
 	}
 
 	cookie, err := r.Cookie(o.cookieName(refreshCookie))

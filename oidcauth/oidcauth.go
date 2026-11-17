@@ -355,17 +355,12 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 
 func (o *OidcAuth) Logout(w http.ResponseWriter, r *http.Request) {
 	o.clearCookie(w, sessionCookie)
-	if cookie, err := r.Cookie(o.cookieName(refreshCookie)); err == nil && cookie.Value != "" && o.revocationURL != "" {
-		if retry, err := o.revokeSession(r.Context(), cookie.Value); err != nil {
-			if retry != cookie.Value {
-				o.setCookie(w, refreshCookie, retry, defaultRefreshCookieMaxAge)
-			}
+	o.clearCookie(w, refreshCookie)
+	if cookie, err := r.Cookie(o.cookieName(refreshCookie)); err == nil && cookie.Value != "" {
+		if err := o.revokeSession(r.Context(), cookie.Value); err != nil {
 			o.logger.Error("could not revoke the session", logger.GetSlogAttrFromError(err))
-			o.renderer.Text(w, http.StatusServiceUnavailable, "logout could not be completed, please try again")
-			return
 		}
 	}
-	o.clearCookie(w, refreshCookie)
 
 	endSession, err := url.Parse(o.endSessionURL)
 	if err != nil || o.endSessionURL == "" {

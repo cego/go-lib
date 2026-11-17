@@ -63,37 +63,39 @@ func TestLogoutRevokesRefresh(t *testing.T) {
 	}
 }
 
-func TestLogoutRevocationFailureCanBeRetried(t *testing.T) {
+func TestLogoutCompletesWhenRevocationFails(t *testing.T) {
 	idp := newFakeIDP(t)
+	idp.RotateRefreshTokens()
 	transport := idp.Client().Transport
-	var fail atomic.Bool
-	fail.Store(true)
 	idp.Client().Transport = idpTransport(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Path == "/revoke" && fail.Load() {
+		if r.URL.Path == "/revoke" {
 			return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: http.NoBody, Header: make(http.Header)}, nil
 		}
 		return transport.RoundTrip(r)
 	})
 	target, client := loggedIn(t, idp)
+	original := jarCookie(t, client, target, refreshCookieName)
+	expireSession(t, client, target)
+	refreshed := browserGet(t, client, target+"/protected")
+	require.NoError(t, refreshed.Body.Close())
+	require.Equal(t, http.StatusOK, refreshed.StatusCode)
 	token := jarCookie(t, client, target, refreshCookieName)
 	res, err := client.Post(target+oidcauth.LogoutPath, "", nil)
 	require.NoError(t, err)
 	require.NoError(t, res.Body.Close())
-	assert.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
-	assert.Equal(t, token, jarCookie(t, client, target, refreshCookieName))
-	assert.Equal(t, http.StatusUnauthorized, replayRefresh(t, client, target, token).StatusCode)
-	fail.Store(false)
-	res, err = client.Post(target+oidcauth.LogoutPath, "", nil)
-	require.NoError(t, err)
-	require.NoError(t, res.Body.Close())
 	assert.Equal(t, http.StatusSeeOther, res.StatusCode)
+	assert.Contains(t, res.Header.Get("Location"), idp.IssuerURL()+"/logout")
+	assert.Empty(t, jarCookie(t, client, target, sessionCookieName))
 	assert.Empty(t, jarCookie(t, client, target, refreshCookieName))
+	assert.Equal(t, http.StatusUnauthorized, replayRefresh(t, client, target, token).StatusCode)
+	assert.Equal(t, http.StatusUnauthorized, replayRefresh(t, client, target, original).StatusCode)
 }
 
 func TestRevocationDiscovery(t *testing.T) {
 	for _, method := range []string{"missing-endpoint", "client_secret_post", "unsupported"} {
 		t.Run(method, func(t *testing.T) {
 			idp := newFakeIDP(t)
+			idp.RotateRefreshTokens()
 			transport := idp.Client().Transport
 			idp.Client().Transport = idpTransport(func(r *http.Request) (*http.Response, error) {
 				if r.URL.Path == "/revoke" {
@@ -134,17 +136,22 @@ func TestRevocationDiscovery(t *testing.T) {
 				return res, nil
 			})
 			target, client := loggedIn(t, idp)
-			if method != "client_secret_post" {
-				assert.Empty(t, jarCookie(t, client, target, refreshCookieName))
-				expireSession(t, client, target)
-				assert.Equal(t, http.StatusUnauthorized, replayRefresh(t, client, target, "invented").StatusCode)
-			} else {
-				assert.NotEmpty(t, jarCookie(t, client, target, refreshCookieName))
-			}
+			original := jarCookie(t, client, target, refreshCookieName)
+			require.NotEmpty(t, original)
+			expireSession(t, client, target)
+			refreshed := browserGet(t, client, target+"/protected")
+			require.NoError(t, refreshed.Body.Close())
+			require.Equal(t, http.StatusOK, refreshed.StatusCode)
+			assert.Equal(t, 1, idp.Refreshes())
+			rotated := jarCookie(t, client, target, refreshCookieName)
 			res, err := client.Post(target+oidcauth.LogoutPath, "", nil)
 			require.NoError(t, err)
 			require.NoError(t, res.Body.Close())
 			assert.Equal(t, http.StatusSeeOther, res.StatusCode)
+			assert.Empty(t, jarCookie(t, client, target, sessionCookieName))
+			assert.Empty(t, jarCookie(t, client, target, refreshCookieName))
+			assert.Equal(t, http.StatusUnauthorized, replayRefresh(t, client, target, original).StatusCode)
+			assert.Equal(t, http.StatusUnauthorized, replayRefresh(t, client, target, rotated).StatusCode)
 		})
 	}
 }
@@ -166,6 +173,6 @@ func TestRevocationDoesNotFollowRedirects(t *testing.T) {
 	res, err := client.Post(target+oidcauth.LogoutPath, "", nil)
 	require.NoError(t, err)
 	require.NoError(t, res.Body.Close())
-	assert.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+	assert.Equal(t, http.StatusSeeOther, res.StatusCode)
 	assert.False(t, forwarded.Load())
 }
