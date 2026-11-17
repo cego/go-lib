@@ -131,10 +131,14 @@ type OidcAuth struct {
 	bearerVerifier *coreoidc.IDTokenVerifier
 	bearerAudience string
 	endSessionURL  string
+	revocationURL  string
+	revocationAuth oauth2.AuthStyle
+	tokenRequests  chan struct{}
 	httpClient     *http.Client
 	scopes         []string
 	rolesClaim     string
 	cookiePrefix   string
+	refreshes      refreshes
 }
 
 func New(ctx context.Context, l logger.Logger, cfg Config, opts ...OptionFunc) (*OidcAuth, error) {
@@ -152,12 +156,13 @@ func New(ctx context.Context, l logger.Logger, cfg Config, opts ...OptionFunc) (
 	}
 
 	o := &OidcAuth{
-		logger:       l,
-		renderer:     renderer.New(l),
-		httpClient:   &http.Client{Timeout: 10 * time.Second},
-		scopes:       []string{coreoidc.ScopeOpenID, "profile", "email"},
-		rolesClaim:   DefaultRolesClaim,
-		cookiePrefix: DefaultCookiePrefix,
+		logger:        l,
+		renderer:      renderer.New(l),
+		httpClient:    &http.Client{Timeout: 10 * time.Second},
+		scopes:        []string{coreoidc.ScopeOpenID, "profile", "email"},
+		rolesClaim:    DefaultRolesClaim,
+		cookiePrefix:  DefaultCookiePrefix,
+		tokenRequests: make(chan struct{}, maxTokenRequests),
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -169,8 +174,10 @@ func New(ctx context.Context, l logger.Logger, cfg Config, opts ...OptionFunc) (
 	}
 
 	var discovery struct {
-		EndSessionEndpoint string `json:"end_session_endpoint"`
-		JwksURI            string `json:"jwks_uri"`
+		EndSessionEndpoint    string   `json:"end_session_endpoint"`
+		JwksURI               string   `json:"jwks_uri"`
+		RevocationEndpoint    string   `json:"revocation_endpoint"`
+		RevocationAuthMethods []string `json:"revocation_endpoint_auth_methods_supported"`
 	}
 	if err := provider.Claims(&discovery); err != nil {
 		return nil, fmt.Errorf("reading discovery document: %w", err)
@@ -181,6 +188,7 @@ func New(ctx context.Context, l logger.Logger, cfg Config, opts ...OptionFunc) (
 		"token_endpoint":         provider.Endpoint().TokenURL,
 		"jwks_uri":               discovery.JwksURI,
 		"end_session_endpoint":   discovery.EndSessionEndpoint,
+		"revocation_endpoint":    discovery.RevocationEndpoint,
 	} {
 		if endpoint == "" {
 			continue
@@ -204,6 +212,15 @@ func New(ctx context.Context, l logger.Logger, cfg Config, opts ...OptionFunc) (
 	}
 	o.bearerVerifier = provider.Verifier(&coreoidc.Config{ClientID: o.bearerAudience})
 	o.endSessionURL = discovery.EndSessionEndpoint
+	o.revocationURL = discovery.RevocationEndpoint
+	o.revocationAuth = oauth2.AuthStyleInHeader
+	if len(discovery.RevocationAuthMethods) > 0 && !slices.Contains(discovery.RevocationAuthMethods, "client_secret_basic") {
+		if slices.Contains(discovery.RevocationAuthMethods, "client_secret_post") {
+			o.revocationAuth = oauth2.AuthStyleInParams
+		} else {
+			o.revocationURL = ""
+		}
+	}
 
 	return o, nil
 }
@@ -218,6 +235,13 @@ func (o *OidcAuth) Handler(handler http.Handler, roles ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, err := o.userFromRequest(r)
 		if err != nil {
+			user, err = o.refreshSession(w, r)
+		}
+		if err != nil {
+			if errors.Is(err, errRefreshBusy) {
+				o.renderer.Text(w, http.StatusServiceUnavailable, "authentication temporarily unavailable")
+				return
+			}
 			o.startAuthentication(w, r)
 			return
 		}
@@ -300,17 +324,11 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawIDToken, ok := token.Extra("id_token").(string)
-	if !ok {
-		o.renderer.Text(w, http.StatusUnauthorized, loginFailedMessage)
-		o.logger.Error("token response had no id_token")
-		return
-	}
-
-	idToken, err := o.verifier.Verify(coreoidc.ClientContext(r.Context(), o.httpClient), rawIDToken)
+	ctx := coreoidc.ClientContext(r.Context(), o.httpClient)
+	login, idToken, err := o.sessionFrom(ctx, token)
 	if err != nil {
 		o.renderer.Text(w, http.StatusUnauthorized, loginFailedMessage)
-		o.logger.Error("failed to verify id token", logger.GetSlogAttrFromError(err))
+		o.logger.Error("failed to start a session from the token response", logger.GetSlogAttrFromError(err))
 		return
 	}
 
@@ -320,20 +338,7 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := o.claimsToUser(idToken, true)
-	if err != nil {
-		o.renderer.Text(w, http.StatusUnauthorized, loginFailedMessage)
-		o.logger.Error("failed to read id token claims", logger.GetSlogAttrFromError(err))
-		return
-	}
-
-	if len(rawIDToken) > maxSessionCookieBytes {
-		o.renderer.Text(w, http.StatusInternalServerError, loginFailedMessage)
-		o.logger.Error("id token is too large to keep in a cookie", "bytes", len(rawIDToken), "limit", maxSessionCookieBytes)
-		return
-	}
-
-	o.setCookie(w, sessionCookie, rawIDToken, time.Until(idToken.Expiry))
+	o.setSession(w, login)
 	o.clearCookie(w, stateCookie)
 	o.clearCookie(w, nonceCookie)
 	o.clearCookie(w, verifierCookie)
@@ -344,12 +349,18 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	o.clearCookie(w, returnCookie)
 
-	o.logger.Info("logged in", "user", user)
+	o.logger.Info("logged in", "user", login.user)
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func (o *OidcAuth) Logout(w http.ResponseWriter, r *http.Request) {
 	o.clearCookie(w, sessionCookie)
+	o.clearCookie(w, refreshCookie)
+	if cookie, err := r.Cookie(o.cookieName(refreshCookie)); err == nil && cookie.Value != "" {
+		if err := o.revokeSession(r.Context(), cookie.Value); err != nil {
+			o.logger.Error("could not revoke the session", logger.GetSlogAttrFromError(err))
+		}
+	}
 
 	endSession, err := url.Parse(o.endSessionURL)
 	if err != nil || o.endSessionURL == "" {

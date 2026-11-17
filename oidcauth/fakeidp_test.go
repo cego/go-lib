@@ -33,6 +33,10 @@ type fakeIDP struct {
 	nextUser   map[string]any
 	redirects  map[string]string
 	expiry     time.Duration
+
+	sessions  map[string]map[string]any
+	rotate    bool
+	refreshes int
 }
 
 func newFakeIDP(t *testing.T) *fakeIDP {
@@ -47,6 +51,7 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 		pending:    map[string]map[string]any{},
 		challenges: map[string]string{},
 		redirects:  map[string]string{},
+		sessions:   map[string]map[string]any{},
 		expiry:     5 * time.Minute,
 	}
 	mux := http.NewServeMux()
@@ -54,6 +59,7 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 	mux.HandleFunc("/jwks", idp.handleJWKS)
 	mux.HandleFunc("/auth", idp.handleAuthorize)
 	mux.HandleFunc("/token", idp.handleToken)
+	mux.HandleFunc("/revoke", idp.handleRevoke)
 	idp.server = httptest.NewTLSServer(mux)
 	t.Cleanup(idp.server.Close)
 	return idp
@@ -73,6 +79,35 @@ func (idp *fakeIDP) LoginAs(claims map[string]any) {
 	idp.mu.Lock()
 	defer idp.mu.Unlock()
 	idp.nextUser = claims
+}
+
+// RotateRefreshTokens makes each refresh token work once.
+func (idp *fakeIDP) RotateRefreshTokens() {
+	idp.mu.Lock()
+	defer idp.mu.Unlock()
+	idp.rotate = true
+}
+
+// EndSessions makes every refresh token handed out so far worthless.
+func (idp *fakeIDP) EndSessions() {
+	idp.mu.Lock()
+	defer idp.mu.Unlock()
+	idp.sessions = map[string]map[string]any{}
+}
+
+// ChangeSessions replaces the claims of every session, as when a role is granted or taken away.
+func (idp *fakeIDP) ChangeSessions(claims map[string]any) {
+	idp.mu.Lock()
+	defer idp.mu.Unlock()
+	for token := range idp.sessions {
+		idp.sessions[token] = claims
+	}
+}
+
+func (idp *fakeIDP) Refreshes() int {
+	idp.mu.Lock()
+	defer idp.mu.Unlock()
+	return idp.refreshes
 }
 
 func (idp *fakeIDP) MintAccessToken(t *testing.T, audience string, claims map[string]any) string {
@@ -129,6 +164,7 @@ func (idp *fakeIDP) handleDiscovery(w http.ResponseWriter, _ *http.Request) {
 		"issuer":                                u,
 		"authorization_endpoint":                u + "/auth",
 		"token_endpoint":                        u + "/token",
+		"revocation_endpoint":                   u + "/revoke",
 		"end_session_endpoint":                  u + "/logout",
 		"jwks_uri":                              u + "/jwks",
 		"id_token_signing_alg_values_supported": []string{"RS256"},
@@ -221,6 +257,11 @@ func (idp *fakeIDP) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.PostFormValue("grant_type") == "refresh_token" {
+		idp.handleRefresh(w, r.PostFormValue("refresh_token"))
+		return
+	}
+
 	code := r.PostFormValue("code")
 	idp.mu.Lock()
 	userClaims, found := idp.pending[code]
@@ -239,17 +280,80 @@ func (idp *fakeIDP) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idToken, err := idp.signJWT(idp.idClaims(userClaims))
+	nonce, _ := userClaims["nonce"].(string)
+	delete(userClaims, "nonce")
+	idp.respondWithSession(w, userClaims, nonce)
+}
+
+func (idp *fakeIDP) handleRefresh(w http.ResponseWriter, refreshToken string) {
+	idp.mu.Lock()
+	claims, found := idp.sessions[refreshToken]
+	if found {
+		idp.refreshes++
+		delete(idp.sessions, refreshToken)
+	}
+	rotate := idp.rotate
+	idp.mu.Unlock()
+	if !found {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "invalid_grant"})
+		return
+	}
+
+	if rotate {
+		idp.respondWithSession(w, claims, "")
+		return
+	}
+	idp.respond(w, claims, refreshToken, "")
+}
+
+func (idp *fakeIDP) handleRevoke(w http.ResponseWriter, r *http.Request) {
+	clientID, clientSecret, ok := r.BasicAuth()
+	if !ok {
+		clientID, clientSecret = r.PostFormValue("client_id"), r.PostFormValue("client_secret")
+	}
+	if r.Method != http.MethodPost || clientID != testClientID || clientSecret != testClientSecret {
+		http.Error(w, "invalid client", http.StatusUnauthorized)
+		return
+	}
+	idp.mu.Lock()
+	delete(idp.sessions, r.PostFormValue("token"))
+	idp.mu.Unlock()
+	w.WriteHeader(http.StatusOK)
+}
+
+func (idp *fakeIDP) respondWithSession(w http.ResponseWriter, claims map[string]any, nonce string) {
+	refreshToken, err := randomCode()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	idp.respond(w, claims, refreshToken, nonce)
+}
+
+func (idp *fakeIDP) respond(w http.ResponseWriter, claims map[string]any, refreshToken, nonce string) {
+	idp.mu.Lock()
+	idp.sessions[refreshToken] = claims
+	idp.mu.Unlock()
+
+	idClaims := idp.idClaims(claims)
+	if nonce != "" {
+		idClaims["nonce"] = nonce
+	}
+	idToken, err := idp.signJWT(idClaims)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"access_token": "not-used-by-oidcauth",
-		"id_token":     idToken,
-		"token_type":   "Bearer",
-		"expires_in":   int(idp.expiry.Seconds()),
+		"access_token":       "not-used-by-oidcauth",
+		"id_token":           idToken,
+		"refresh_token":      refreshToken,
+		"refresh_expires_in": 1800,
+		"token_type":         "Bearer",
+		"expires_in":         int(idp.expiry.Seconds()),
 	})
 }
 

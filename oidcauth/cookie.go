@@ -8,6 +8,7 @@ import (
 
 const (
 	sessionCookie  = "session"
+	refreshCookie  = "refresh"
 	stateCookie    = "state"
 	nonceCookie    = "nonce"
 	verifierCookie = "verifier"
