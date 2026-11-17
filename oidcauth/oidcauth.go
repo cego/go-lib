@@ -135,6 +135,7 @@ type OidcAuth struct {
 	scopes         []string
 	rolesClaim     string
 	cookiePrefix   string
+	refreshes      refreshes
 }
 
 func New(ctx context.Context, l logger.Logger, cfg Config, opts ...OptionFunc) (*OidcAuth, error) {
@@ -218,6 +219,9 @@ func (o *OidcAuth) Handler(handler http.Handler, roles ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, err := o.userFromRequest(r)
 		if err != nil {
+			user, err = o.refreshSession(w, r)
+		}
+		if err != nil {
 			o.startAuthentication(w, r)
 			return
 		}
@@ -300,17 +304,11 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawIDToken, ok := token.Extra("id_token").(string)
-	if !ok {
-		o.renderer.Text(w, http.StatusUnauthorized, loginFailedMessage)
-		o.logger.Error("token response had no id_token")
-		return
-	}
-
-	idToken, err := o.verifier.Verify(coreoidc.ClientContext(r.Context(), o.httpClient), rawIDToken)
+	ctx := coreoidc.ClientContext(r.Context(), o.httpClient)
+	login, idToken, err := o.sessionFrom(ctx, token)
 	if err != nil {
 		o.renderer.Text(w, http.StatusUnauthorized, loginFailedMessage)
-		o.logger.Error("failed to verify id token", logger.GetSlogAttrFromError(err))
+		o.logger.Error("failed to start a session from the token response", logger.GetSlogAttrFromError(err))
 		return
 	}
 
@@ -320,20 +318,7 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := o.claimsToUser(idToken, true)
-	if err != nil {
-		o.renderer.Text(w, http.StatusUnauthorized, loginFailedMessage)
-		o.logger.Error("failed to read id token claims", logger.GetSlogAttrFromError(err))
-		return
-	}
-
-	if len(rawIDToken) > maxSessionCookieBytes {
-		o.renderer.Text(w, http.StatusInternalServerError, loginFailedMessage)
-		o.logger.Error("id token is too large to keep in a cookie", "bytes", len(rawIDToken), "limit", maxSessionCookieBytes)
-		return
-	}
-
-	o.setCookie(w, sessionCookie, rawIDToken, time.Until(idToken.Expiry))
+	o.setSession(w, login)
 	o.clearCookie(w, stateCookie)
 	o.clearCookie(w, nonceCookie)
 	o.clearCookie(w, verifierCookie)
@@ -344,12 +329,13 @@ func (o *OidcAuth) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	o.clearCookie(w, returnCookie)
 
-	o.logger.Info("logged in", "user", user)
+	o.logger.Info("logged in", "user", login.user)
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func (o *OidcAuth) Logout(w http.ResponseWriter, r *http.Request) {
 	o.clearCookie(w, sessionCookie)
+	o.clearCookie(w, refreshCookie)
 
 	endSession, err := url.Parse(o.endSessionURL)
 	if err != nil || o.endSessionURL == "" {

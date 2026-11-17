@@ -87,7 +87,8 @@ mux.Handle("/data", fa.HandlerFunc(func (w http.ResponseWriter, req *http.Reques
 ## Using OidcAuth
 
 Authorization code flow with PKCE for browsers, bearer tokens for api clients. The verified id token
-is the session cookie, so there is no session store.
+is the session cookie, so there is no session store. When the provider hands out a refresh token, it is
+kept in a second cookie and renews the session when the id token runs out.
 
 ```go
 mux := http.NewServeMux()
@@ -115,6 +116,10 @@ user.HasAnyRole("reader", "tool-admin")
 - Register `<BaseURL>/auth/callback` on the client, or the provider rejects the login
 - Roles are read from `client_roles` and `resource_access.<client>.roles`
 - Issuer and base url must be https, except on loopback
+- A session lasts as long as the id token. A refresh renews it without a redirect, and reads the roles anew,
+  until the provider ends the session
+- A refresh token is exchanged once per process for the requests that arrive holding it. Behind several
+  replicas, a provider that rotates refresh tokens sends some of those requests back to login
 - No session: browsers go to the provider, htmx gets `HX-Redirect`, api clients get `401`
 - Logout is a `POST`, and hands the provider no token, so it asks the user to confirm
 - Sessions cannot be revoked before the id token expires, so keep that lifetime short
