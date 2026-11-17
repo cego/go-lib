@@ -133,7 +133,6 @@ func TestRefresh(t *testing.T) {
 
 		assert.Equal(t, http.StatusFound, response.StatusCode)
 		assert.Contains(t, response.Header.Get("Location"), idp.IssuerURL()+"/auth")
-		assert.Empty(t, jarCookie(t, client, serverURL, refreshCookieName))
 	})
 
 	t.Run("requests holding the same refresh token share one refresh when the provider rotates it", func(t *testing.T) {

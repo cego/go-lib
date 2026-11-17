@@ -102,7 +102,6 @@ func (o *OidcAuth) refreshSession(w http.ResponseWriter, r *http.Request) (User,
 	})
 	if err != nil {
 		o.logger.Info("could not refresh the session", logger.GetSlogAttrFromError(err))
-		o.clearCookie(w, refreshCookie)
 		return User{}, err
 	}
 
