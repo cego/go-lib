@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"reflect"
 	"runtime/debug"
 	"time"
 
@@ -49,6 +50,7 @@ func newSlogger(level slog.Level) *slog.Logger {
 func GetSlogAttrFromError(err error) slog.Attr {
 	return slog.Group("error",
 		slog.String("message", err.Error()),
+		slog.String("type", reflect.TypeOf(err).String()),
 		slog.String("stack_trace", string(debug.Stack())),
 	)
 }
